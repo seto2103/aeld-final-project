@@ -120,8 +120,8 @@ semesters.
   https://github.com/seto2103/aeld-final-project
 * Capture daemon / HTTP server application code and the GPIO driver code will be hosted in the
   same repository at https://github.com/seto2103/aeld-final-project, under `app/` and `driver/`.
-* The GitHub Projects board is part of the same repository, under its
-  [Projects tab](https://github.com/seto2103/aeld-final-project/projects).
+* The GitHub Projects board is linked to the same repository and hosted at
+  https://github.com/users/seto2103/projects/1
 
 No additional repositories are needed.
 

@@ -1,6 +1,6 @@
 # Schedule
 
-Project board: [aeld-final-project Projects](https://github.com/seto2103/aeld-final-project/projects)
+Project board: https://github.com/users/seto2103/projects/1
 
 All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto2103)).
 
