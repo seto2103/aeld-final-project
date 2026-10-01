@@ -127,4 +127,4 @@ No additional repositories are needed.
 
 ## Schedule Page
 
-[Schedule](https://github.com/seto2103/aeld-final-project/wiki/Schedule)
+[Schedule](Schedule.md)
