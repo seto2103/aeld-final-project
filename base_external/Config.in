@@ -1,1 +1,2 @@
-# Project packages are sourced here
+source "$BR2_EXTERNAL_AESD_FINAL_PROJECT_PATH/package/camera-server/Config.in"
+source "$BR2_EXTERNAL_AESD_FINAL_PROJECT_PATH/package/status-led/Config.in"

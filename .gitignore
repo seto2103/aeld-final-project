@@ -3,3 +3,9 @@
 *.log
 build/
 .vscode/
+*.mod
+*.mod.c
+.*.cmd
+Module.symvers
+modules.order
+app/camera-server

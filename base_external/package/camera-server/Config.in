@@ -1,0 +1,7 @@
+config BR2_PACKAGE_CAMERA_SERVER
+	bool "camera-server"
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	select BR2_PACKAGE_JPEG
+	help
+	  Network security camera daemon: V4L2 capture, MJPEG streaming over HTTP and
+	  motion-triggered recording. Source in app/ of the project repository.

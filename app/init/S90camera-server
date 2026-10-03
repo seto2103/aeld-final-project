@@ -1,0 +1,37 @@
+#!/bin/sh
+
+DAEMON=/usr/bin/camera-server
+DAEMON_OPTS=""
+
+# PID file to track the daemon
+PIDFILE=/var/run/camera-server.pid
+
+start() {
+    echo "Starting camera-server..."
+    start-stop-daemon --start --background --pidfile $PIDFILE \
+                      --make-pidfile --exec $DAEMON -- $DAEMON_OPTS
+}
+
+stop() {
+    echo "Stopping camera-server..."
+    start-stop-daemon --stop --pidfile $PIDFILE --retry 5
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0
