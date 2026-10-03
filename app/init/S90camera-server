@@ -8,6 +8,8 @@ PIDFILE=/var/run/camera-server.pid
 
 start() {
     echo "Starting camera-server..."
+    # No hotplug helper in this image, so load the USB webcam driver explicitly
+    modprobe uvcvideo
     start-stop-daemon --start --background --pidfile $PIDFILE \
                       --make-pidfile --exec $DAEMON -- $DAEMON_OPTS
 }

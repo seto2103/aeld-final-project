@@ -21,8 +21,7 @@ offers, which decides the design of the capture daemon in Sprint 2.
 - [ ] The output of `v4l2-ctl --list-formats-ext` is attached to this issue, and a comment
       states whether MJPG is offered and which resolution and frame rate will be used.
 - [ ] One frame is captured to a file on the Pi with `v4l2-ctl --stream-mmap --stream-count=1
-      --stream-to=frame.jpg`, copied to a PC with `scp`, and opens as a valid image. The image
-      is attached to this issue.
+      --stream-to=frame.jpg`, copied to a PC with `scp`, and opens as a valid image.
 
 ## Status
 

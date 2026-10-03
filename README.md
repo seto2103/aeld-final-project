@@ -65,10 +65,13 @@ Rebuild one package and copy the result to the Pi instead of reflashing the SD c
 
 ```
 make -C buildroot camera-server-rebuild
-scp buildroot/output/target/usr/bin/camera-server root@<pi-address>:/usr/bin/
+scp -O buildroot/output/target/usr/bin/camera-server root@<pi-address>:/usr/bin/
 
 make -C buildroot status-led-rebuild
-scp buildroot/output/target/lib/modules/*/extra/status_led.ko.xz root@<pi-address>:/lib/modules/$(ls buildroot/output/target/lib/modules)/extra/
+scp -O buildroot/output/target/lib/modules/*/extra/status_led.ko.xz root@<pi-address>:/lib/modules/$(ls buildroot/output/target/lib/modules)/extra/
 ```
+
+`-O` makes `scp` use the classic copy protocol, because the Pi's SSH server (dropbear) has no
+SFTP support, which newer `scp` versions use by default.
 
 The app also builds on the development host for quick compile checks: `make -C app`.
