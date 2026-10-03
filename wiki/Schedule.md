@@ -8,7 +8,7 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 
 | Sprint | Issue | Blocked by | Status |
 | --- | --- | --- | --- |
-| 1 | [#1 Buildroot image boots on Raspberry Pi 4B with SSH access](https://github.com/seto2103/aeld-final-project/issues/1) | none | Not started |
+| 1 | [#1 Buildroot image boots on Raspberry Pi 4B with SSH access](https://github.com/seto2103/aeld-final-project/issues/1) | none | Done |
 | 1 | [#2 StreamCam bring-up: capture a frame with v4l2-ctl](https://github.com/seto2103/aeld-final-project/issues/2) | #1 | Not started |
 | 1 | [#3 Buildroot external tree with skeleton app and driver packages](https://github.com/seto2103/aeld-final-project/issues/3) | #1 | Not started |
 | 2 | V4L2 capture daemon captures MJPEG frames with mmap streaming | #2, #3 | Planned |
