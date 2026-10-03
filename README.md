@@ -75,3 +75,9 @@ scp -O buildroot/output/target/lib/modules/*/extra/status_led.ko.xz root@<pi-add
 SFTP support, which newer `scp` versions use by default.
 
 The app also builds on the development host for quick compile checks: `make -C app`.
+
+## AI Tool Usage
+
+Claude (Anthropic), through the Claude Code command line tool, was used for assistance with
+planning, documentation and code in this project, under the course's Full AI Tool Usage policy.
+All AI-assisted work was reviewed, tested and approved by me.
