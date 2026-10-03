@@ -30,9 +30,9 @@ the course: a custom image, a kernel driver, a multi-threaded daemon and network
 ```mermaid
 flowchart LR
     CAM["Logitech StreamCam<br/>(USB UVC webcam)"] -- USB --> UVC
-    DRV -- GPIO output --> LED["Status LED"]
 
     subgraph PI["Raspberry Pi 4 Model B (Buildroot Linux)"]
+        LED["Onboard ACT LED<br/>(status LED)"]
         subgraph KERNEL["Kernel"]
             UVC["uvcvideo driver<br/>/dev/video0"]
             DRV["GPIO char driver (custom)<br/>/dev/aesdgpio"]
@@ -46,6 +46,7 @@ flowchart LR
         CAP --> HTTP
         CAP --> MOT
         MOT --> DRV
+        DRV -- GPIO output --> LED
         MOT --> SD[("SD card<br/>recordings")]
     end
 
@@ -66,7 +67,9 @@ Buildroot, using `raspberrypi4_64_defconfig` as the base configuration with a
 * **[Logitech StreamCam](https://www.logitech.com/en-us/shop/p/streamcam.960-001286)**, a USB
   Video Class webcam handled by the in-kernel `uvcvideo` driver. It has a fixed USB-C cable, so
   it connects to a USB 3.0 port of the Pi through a USB-C to USB-A adapter.
-* One **LED with resistor**, connected to the GPIO header.
+* The Pi's **onboard green activity (ACT) LED**, used as the status LED. A device tree overlay
+  releases it from the kernel's default LED driver so the project's GPIO driver can control it.
+  No external components are needed.
 
 All hardware is sourced by me.
 
@@ -101,8 +104,8 @@ Not yet discussed in class:
 
 * The [V4L2 capture API](https://www.kernel.org/doc/html/latest/userspace-api/media/v4l/v4l2.html):
   format negotiation with `ioctl`, memory-mapped buffers and streaming I/O.
-* The kernel GPIO consumer interface (`gpiod`) and a device tree overlay describing the
-  LED pin.
+* The kernel GPIO consumer interface (`gpiod`) and a device tree overlay which
+  reassigns the onboard ACT LED pin to the project's driver.
 * MJPEG over HTTP (`multipart/x-mixed-replace`) streaming.
 * Frame-difference motion detection, a pre-event ring buffer of frames, and clip storage
   management.
