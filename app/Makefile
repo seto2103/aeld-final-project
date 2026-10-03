@@ -8,11 +8,12 @@ APP_LDLIBS = -pthread
 
 TARGET = camera-server
 
-SRC = src/main.c
+SRC = src/main.c src/capture.c src/frame_store.c
+HDR = src/capture.h src/frame_store.h
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
+$(TARGET): $(SRC) $(HDR)
 	$(CC) $(CFLAGS) $(APP_CFLAGS) $(LDFLAGS) -o $(TARGET) $(SRC) $(APP_LDLIBS)
 
 clean:

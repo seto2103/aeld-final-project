@@ -1,22 +1,30 @@
 #!/bin/sh
 
 DAEMON=/usr/bin/camera-server
-DAEMON_OPTS=""
+DAEMON_OPTS="-d"
 
-# PID file to track the daemon
-PIDFILE=/var/run/camera-server.pid
+# camera-server daemonizes itself with -d, so the process is found by name instead of a PID file
 
 start() {
     echo "Starting camera-server..."
     # No hotplug helper in this image, so load the USB webcam driver explicitly
     modprobe uvcvideo
-    start-stop-daemon --start --background --pidfile $PIDFILE \
-                      --make-pidfile --exec $DAEMON -- $DAEMON_OPTS
+    start-stop-daemon --start --name camera-server --exec $DAEMON -- $DAEMON_OPTS
 }
 
 stop() {
     echo "Stopping camera-server..."
-    start-stop-daemon --stop --pidfile $PIDFILE --retry 5
+    start-stop-daemon --stop --name camera-server
+    # BusyBox start-stop-daemon has no --retry, so wait up to 5 s for the process to exit
+    i=0
+    while pidof camera-server > /dev/null; do
+        i=$((i + 1))
+        if [ $i -gt 25 ]; then
+            echo "camera-server did not stop"
+            return 1
+        fi
+        sleep 0.2
+    done
 }
 
 case "$1" in
