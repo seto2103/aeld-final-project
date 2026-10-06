@@ -3,7 +3,8 @@ CC = $(CROSS_COMPILE)gcc
 VERSION ?= 0.1.0
 
 # Kept separate from CFLAGS/LDFLAGS so they survive Buildroot passing its own on the command line
-APP_CFLAGS = -Wall -Wextra -pthread -DVERSION=\"$(VERSION)\"
+# ../driver provides status_led_ioctl.h on host builds; Buildroot builds get it from staging
+APP_CFLAGS = -Wall -Wextra -pthread -DVERSION=\"$(VERSION)\" -I../driver
 APP_LDLIBS = -pthread
 
 TARGET = camera-server

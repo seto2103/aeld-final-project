@@ -14,7 +14,7 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 | 2 | [#4 V4L2 capture daemon captures MJPEG frames with mmap streaming (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/4) | #2, #3 | Done |
 | 2 | [#5 MJPEG HTTP server streams live video to a browser (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/5) | #4 | Done |
 | 2 | [#6 Multithreaded camera-server: capture thread, shared frame store, thread per client](https://github.com/seto2103/aeld-final-project/issues/6) | #5 | Not started |
-| 2 | [#7 Status LED driver controls the onboard ACT LED (on, off, blink) with a device tree overlay](https://github.com/seto2103/aeld-final-project/issues/7) | #3 | Not started |
+| 2 | [#7 Status LED driver controls the onboard ACT LED (on, off, blink) with a device tree overlay](https://github.com/seto2103/aeld-final-project/issues/7) | #3 | Done |
 | 3 | 5 second pre-event ring buffer; on motion a clip is saved from the buffer until motion stops | #6 | Planned |
 | 3 | Status LED blinks while a clip is being recorded | #7, motion recording | Planned |
 | 3 | Watchdog: supervisor restarts the capture daemon after a crash and feeds the Pi hardware watchdog | #6 | Planned |

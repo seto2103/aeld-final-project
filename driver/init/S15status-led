@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# Loads the status_led driver. There is no mdev or udev to load it from the device tree
+# alias, so it is loaded here, before camera-server starts.
+#
+
+case "$1" in
+    start)
+        printf "Loading status_led: "
+        modprobe status_led && echo "OK" || echo "FAIL"
+        ;;
+    stop)
+        printf "Unloading status_led: "
+        modprobe -r status_led && echo "OK" || echo "FAIL"
+        ;;
+    restart)
+        "$0" stop
+        "$0" start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

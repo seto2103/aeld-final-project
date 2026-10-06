@@ -1,6 +1,7 @@
 config BR2_PACKAGE_STATUS_LED
 	bool "status-led"
 	depends on BR2_LINUX_KERNEL
+	depends on BR2_PACKAGE_RPI_FIRMWARE
 	help
 	  Kernel module providing /dev/status_led to control the Raspberry Pi onboard
 	  ACT LED. Source in driver/ of the project repository.

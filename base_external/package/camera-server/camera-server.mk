@@ -7,7 +7,7 @@
 # Built from app/ in this repository rather than a pinned git commit
 CAMERA_SERVER_SITE = $(BR2_EXTERNAL_AESD_FINAL_PROJECT_PATH)/../app
 CAMERA_SERVER_SITE_METHOD = local
-CAMERA_SERVER_DEPENDENCIES = jpeg
+CAMERA_SERVER_DEPENDENCIES = jpeg status-led
 
 define CAMERA_SERVER_BUILD_CMDS
 	$(MAKE) $(TARGET_CONFIGURE_OPTS) -C $(@D) all

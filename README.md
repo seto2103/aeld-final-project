@@ -59,13 +59,27 @@ The root password is `root`.
 The current version serves one client at a time; other connections receive `503 Service
 Unavailable` until it disconnects. Run `camera-server --help` for the command line options.
 
+## Status LED
+
+The onboard green ACT LED is the camera's status light. A device tree overlay
+(`driver/dts/status-led-overlay.dts`, enabled with `dtoverlay=status-led` in `config.txt`) takes it
+away from the SD card activity trigger, and the `status_led` driver, loaded at boot, controls it
+through `/dev/status_led`:
+
+```
+echo blink > /dev/status_led    # also on, off
+cat /dev/status_led             # prints the current mode
+```
+
+Programs can also set the mode and blink period with the ioctls in `driver/status_led_ioctl.h`.
+
 ## Source layout
 
 | Path | Contents |
 | --- | --- |
 | `app/` | `camera-server` userspace daemon (C), its Makefile and init script |
-| `driver/` | `status_led` kernel module for the onboard ACT LED |
-| `base_external/` | Buildroot external tree: project defconfig and the `camera-server` and `status-led` packages |
+| `driver/` | `status_led` kernel module, its device tree overlay and init script |
+| `base_external/` | Buildroot external tree: project defconfig, `config.txt`, and the `camera-server` and `status-led` packages |
 | `buildroot/` | Buildroot submodule, pinned to 2024.02.13 |
 | `wiki/` | Project Overview and Schedule pages |
 
@@ -86,6 +100,14 @@ scp -O buildroot/output/target/lib/modules/*/extra/status_led.ko.xz root@<pi-add
 
 `-O` makes `scp` use the classic copy protocol, because the Pi's SSH server (dropbear) has no
 SFTP support, which newer `scp` versions use by default.
+
+A changed device tree overlay goes on the boot partition, and takes effect after a reboot:
+
+```
+ssh root@<pi-address> 'mkdir -p /mnt/boot && mount /dev/mmcblk0p1 /mnt/boot'
+scp -O buildroot/output/build/status-led/status-led.dtbo root@<pi-address>:/mnt/boot/overlays/
+ssh root@<pi-address> 'umount /mnt/boot && reboot'
+```
 
 The app also builds on the development host for quick compile checks: `make -C app`.
 

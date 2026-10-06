@@ -1,0 +1,35 @@
+/*
+ * Device tree overlay for the status_led driver.
+ *
+ * Takes the onboard green ACT LED (GPIO 42) away from leds-gpio, where it is the SD card
+ * activity light, and describes it as an "aesd,status-led" device instead.
+ * Enabled with "dtoverlay=status-led" in config.txt.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	compatible = "brcm,bcm2711";
+
+	/* leds-gpio skips disabled child nodes, so it leaves GPIO 42 free */
+	fragment@0 {
+		target = <&act_led>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			status_led: status-led {
+				compatible = "aesd,status-led";
+				led-gpios = <&gpio 42 GPIO_ACTIVE_HIGH>;
+				status = "okay";
+			};
+		};
+	};
+};
