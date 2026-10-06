@@ -15,10 +15,11 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 | 2 | [#5 MJPEG HTTP server streams live video to a browser (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/5) | #4 | Done |
 | 2 | [#6 Multithreaded camera-server: capture thread, shared frame store, thread per client](https://github.com/seto2103/aeld-final-project/issues/6) | #5 | Done |
 | 2 | [#7 Status LED driver controls the onboard ACT LED (on, off, blink) with a device tree overlay](https://github.com/seto2103/aeld-final-project/issues/7) | #3 | Done |
-| 3 | 5 second pre-event ring buffer; on motion a clip is saved from the buffer until motion stops | #6 | Planned |
-| 3 | Status LED blinks while a clip is being recorded | #7, motion recording | Planned |
-| 3 | Watchdog: supervisor restarts the capture daemon after a crash and feeds the Pi hardware watchdog | #6 | Planned |
-| 3 | Start on boot, recording rotation, final demo video and wiki update | motion recording | Planned |
+| 3 | [#8 Motion detection thread compares downscaled frames and reports motion start and end](https://github.com/seto2103/aeld-final-project/issues/8) | #6 | Not started |
+| 3 | [#9 Pre-event ring buffer and motion-triggered clip recording to a recordings partition](https://github.com/seto2103/aeld-final-project/issues/9) | #8 | Not started |
+| 3 | [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10) | #7, #9 | Not started |
+| 3 | [#11 camera-supervisor restarts camera-server after a failure and feeds the hardware watchdog](https://github.com/seto2103/aeld-final-project/issues/11) | #6 | Not started |
+| 3 | [#12 Network time, recording rotation, full image check, demo video and wiki update](https://github.com/seto2103/aeld-final-project/issues/12) | #9, #10, #11 | Not started |
 
 ## Sprint 1
 
@@ -45,4 +46,11 @@ restructured into threads (#6) so several clients can watch and Sprint 3 feature
 
 Goal: motion-triggered recording works end to end and the system starts on boot.
 
-Issues will be created at the start of the sprint.
+Motion detection and recording are separate issues (#8, #9) so detection can be tuned before
+clips are written.
+
+* [#8 Motion detection thread compares downscaled frames and reports motion start and end](https://github.com/seto2103/aeld-final-project/issues/8)
+* [#9 Pre-event ring buffer and motion-triggered clip recording to a recordings partition](https://github.com/seto2103/aeld-final-project/issues/9)
+* [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10)
+* [#11 camera-supervisor restarts camera-server after a failure and feeds the hardware watchdog](https://github.com/seto2103/aeld-final-project/issues/11)
+* [#12 Network time, recording rotation, full image check, demo video and wiki update](https://github.com/seto2103/aeld-final-project/issues/12)
