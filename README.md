@@ -46,6 +46,19 @@ ssh root@<pi-address>
 
 The root password is `root`.
 
+## Viewing the camera
+
+`camera-server` starts at boot and serves the camera on port 8080:
+
+| URL | Content |
+| --- | --- |
+| `http://<pi-address>:8080/` | Web page showing the live stream |
+| `http://<pi-address>:8080/stream` | MJPEG stream (`multipart/x-mixed-replace`), also playable in VLC |
+| `http://<pi-address>:8080/snapshot.jpg` | Newest single frame |
+
+The current version serves one client at a time; other connections receive `503 Service
+Unavailable` until it disconnects. Run `camera-server --help` for the command line options.
+
 ## Source layout
 
 | Path | Contents |

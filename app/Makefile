@@ -8,8 +8,8 @@ APP_LDLIBS = -pthread
 
 TARGET = camera-server
 
-SRC = src/main.c src/capture.c src/frame_store.c
-HDR = src/capture.h src/frame_store.h
+SRC = src/main.c src/capture.c src/frame_store.c src/http_server.c
+HDR = src/capture.h src/frame_store.h src/http_server.h
 
 all: $(TARGET)
 

@@ -11,8 +11,8 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 | 1 | [#1 Buildroot image boots on Raspberry Pi 4B with SSH access](https://github.com/seto2103/aeld-final-project/issues/1) | none | Done |
 | 1 | [#2 StreamCam bring-up: capture a frame with v4l2-ctl](https://github.com/seto2103/aeld-final-project/issues/2) | #1 | Done |
 | 1 | [#3 Buildroot external tree with skeleton app and driver packages](https://github.com/seto2103/aeld-final-project/issues/3) | #1 | Done |
-| 2 | [#4 V4L2 capture daemon captures MJPEG frames with mmap streaming (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/4) | #2, #3 | Not started |
-| 2 | [#5 MJPEG HTTP server streams live video to a browser (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/5) | #4 | Not started |
+| 2 | [#4 V4L2 capture daemon captures MJPEG frames with mmap streaming (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/4) | #2, #3 | Done |
+| 2 | [#5 MJPEG HTTP server streams live video to a browser (single-threaded)](https://github.com/seto2103/aeld-final-project/issues/5) | #4 | Done |
 | 2 | [#6 Multithreaded camera-server: capture thread, shared frame store, thread per client](https://github.com/seto2103/aeld-final-project/issues/6) | #5 | Not started |
 | 2 | [#7 Status LED driver controls the onboard ACT LED (on, off, blink) with a device tree overlay](https://github.com/seto2103/aeld-final-project/issues/7) | #3 | Not started |
 | 3 | 5 second pre-event ring buffer; on motion a clip is saved from the buffer until motion stops | #6 | Planned |
