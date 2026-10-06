@@ -56,8 +56,8 @@ The root password is `root`.
 | `http://<pi-address>:8080/stream` | MJPEG stream (`multipart/x-mixed-replace`), also playable in VLC |
 | `http://<pi-address>:8080/snapshot.jpg` | Newest single frame |
 
-The current version serves one client at a time; other connections receive `503 Service
-Unavailable` until it disconnects. Run `camera-server --help` for the command line options.
+Up to 4 clients can watch at once (change with `-c`); further connections receive `503 Service
+Unavailable`. Run `camera-server --help` for the command line options.
 
 ## Status LED
 

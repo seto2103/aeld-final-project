@@ -2,15 +2,21 @@
  * @file main.c
  * @brief Entry point for camera-server, the network security camera daemon.
  *
- * Single-threaded version: one poll() loop waits on the camera and the HTTP server sockets. Each
- * new MJPEG frame is kept in the frame store and sent to the streaming client, if there is one.
+ * Threads:
+ *   capture thread - owns the V4L2 device and is the only writer to the frame store
+ *   client threads - one per HTTP connection, started by the HTTP server, read the frame store
+ *   main thread    - runs the accept loop, handles SIGINT and SIGTERM, and stops and joins the
+ *                    others on exit
+ * Worker threads block SIGINT and SIGTERM, so signals always reach the main thread.
  * Signal and daemon handling are based on the aesdsocket assignment.
  */
 
 #include <errno.h>
 #include <getopt.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,8 +33,11 @@
 #define DEFAULT_HEIGHT              720
 #define DEFAULT_FPS                 30
 #define DEFAULT_PORT                8080
+#define DEFAULT_MAX_CLIENTS         4
+#define MAX_CLIENTS_LIMIT           32
 
-#define POLL_TIMEOUT_MS             1000
+/* How often the capture and accept loops check whether to stop */
+#define POLL_TIMEOUT_MS             500
 /* No frame for this long means the camera has stalled */
 #define FRAME_TIMEOUT_MS            5000
 #define RATE_LOG_INTERVAL_SECONDS   10
@@ -36,6 +45,17 @@
 #define SNAPSHOT_SKIP_FRAMES        60
 
 static volatile sig_atomic_t exit_requested = 0;
+
+/* Set by the main thread to stop the capture thread */
+static atomic_int capture_stop;
+/* Set by the capture thread when it exits, so the main thread stops too */
+static atomic_int capture_finished;
+
+struct capture_thread_args {
+    struct capture *cap;
+    struct frame_store *store;
+    int result;             /* 0 if stopped on request, -1 if the camera failed */
+};
 
 static void signal_handler(int signo)
 {
@@ -118,33 +138,23 @@ static int write_file(const char *path, const void *data, size_t len)
 }
 
 /**
- * Capture until a signal arrives, or, in snapshot mode, until one frame has been saved.
- * @param srv HTTP server, or NULL in snapshot mode
- * @return 0 on a clean exit, -1 if the camera failed
+ * Capture frames into the store until capture_stop is set.
+ * @return 0 when stopped on request, -1 if the camera failed
  */
-static int run(struct capture *cap, struct frame_store *store, struct http_server *srv,
-               const char *snapshot_path)
+static int capture_loop(struct capture *cap, struct frame_store *store)
 {
-    struct pollfd fds[1 + HTTP_SERVER_MAX_POLLFDS];
     double last_frame_time = monotonic_seconds();
     double rate_start = last_frame_time;
     unsigned long rate_frames = 0;
 
-    while (!exit_requested) {
+    while (!atomic_load(&capture_stop)) {
+        struct pollfd pfd = { .fd = capture_fd(cap), .events = POLLIN };
         const void *data;
         size_t len;
         double now;
-        int nfds = 1;
         int ret;
 
-        fds[0].fd = capture_fd(cap);
-        fds[0].events = POLLIN;
-        fds[0].revents = 0;
-        if (srv != NULL) {
-            nfds += http_server_pollfds(srv, &fds[1]);
-        }
-
-        ret = poll(fds, (nfds_t)nfds, POLL_TIMEOUT_MS);
+        ret = poll(&pfd, 1, POLL_TIMEOUT_MS);
         if (ret == -1) {
             if (errno == EINTR) {
                 continue;
@@ -154,12 +164,7 @@ static int run(struct capture *cap, struct frame_store *store, struct http_serve
         }
 
         now = monotonic_seconds();
-        if (srv != NULL) {
-            http_server_handle(srv, &fds[1], nfds - 1, store);
-            http_server_check_timeouts(srv);
-        }
-
-        if (fds[0].revents == 0) {
+        if (ret == 0) {
             if ((now - last_frame_time) * 1000.0 >= FRAME_TIMEOUT_MS) {
                 syslog(LOG_ERR, "No frame from the camera for %d ms", FRAME_TIMEOUT_MS);
                 return -1;
@@ -173,7 +178,7 @@ static int run(struct capture *cap, struct frame_store *store, struct http_serve
             continue;
         }
         if (ret == -1) {
-            syslog(LOG_ERR, "Camera stopped delivering frames, exiting");
+            syslog(LOG_ERR, "Camera stopped delivering frames");
             return -1;
         }
 
@@ -187,17 +192,6 @@ static int run(struct capture *cap, struct frame_store *store, struct http_serve
         }
         last_frame_time = now;
         rate_frames++;
-        if (srv != NULL) {
-            http_server_new_frame(srv, store);
-        }
-
-        if (snapshot_path != NULL && store->seq > SNAPSHOT_SKIP_FRAMES) {
-            if (write_file(snapshot_path, store->data, store->len) == -1) {
-                return -1;
-            }
-            syslog(LOG_INFO, "Saved %zu byte snapshot to %s", store->len, snapshot_path);
-            return 0;
-        }
 
         if (now - rate_start >= RATE_LOG_INTERVAL_SECONDS) {
             syslog(LOG_INFO, "Capture rate %.1f fps, last frame %zu bytes",
@@ -209,6 +203,86 @@ static int run(struct capture *cap, struct frame_store *store, struct http_serve
     return 0;
 }
 
+static void *capture_thread(void *arg)
+{
+    struct capture_thread_args *args = arg;
+
+    args->result = capture_loop(args->cap, args->store);
+    /* No more frames are coming: wake every reader, and tell the main thread to stop */
+    frame_store_shutdown(args->store);
+    atomic_store(&capture_finished, 1);
+    return NULL;
+}
+
+/** Start the capture thread with SIGINT and SIGTERM blocked, so only the main thread gets them. */
+static int start_capture_thread(pthread_t *thread, struct capture_thread_args *args)
+{
+    sigset_t block;
+    sigset_t old;
+    int rc;
+
+    sigemptyset(&block);
+    sigaddset(&block, SIGINT);
+    sigaddset(&block, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &block, &old);
+    rc = pthread_create(thread, NULL, capture_thread, args);
+    pthread_sigmask(SIG_SETMASK, &old, NULL);
+    if (rc != 0) {
+        syslog(LOG_ERR, "pthread_create for capture failed: %s", strerror(rc));
+        return -1;
+    }
+    return 0;
+}
+
+/** Accept loop: runs until a signal arrives or the capture thread exits. */
+static void serve(struct http_server *srv)
+{
+    while (!exit_requested && !atomic_load(&capture_finished)) {
+        struct pollfd pfd = { .fd = http_server_listen_fd(srv), .events = POLLIN };
+        int ret = poll(&pfd, 1, POLL_TIMEOUT_MS);
+
+        if (ret == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            syslog(LOG_ERR, "poll failed: %s", strerror(errno));
+            return;
+        }
+        if (ret > 0) {
+            http_server_accept(srv);
+        }
+        http_server_reap(srv);
+    }
+}
+
+/**
+ * Wait until auto exposure has settled, then write the newest frame to path.
+ * @return 0 on success or if interrupted by a signal, -1 on error
+ */
+static int save_snapshot(struct frame_store *store, const char *path)
+{
+    struct frame_copy frame = { 0 };
+    int ret = 0;
+
+    while (!exit_requested) {
+        int wait = frame_store_wait_newer(store, SNAPSHOT_SKIP_FRAMES, &frame, POLL_TIMEOUT_MS);
+
+        if (wait == 1) {
+            continue;
+        }
+        if (wait == -1) {
+            ret = -1;
+        } else if (write_file(path, frame.data, frame.len) == -1) {
+            ret = -1;
+        } else {
+            syslog(LOG_INFO, "Saved %zu byte snapshot to %s", frame.len, path);
+        }
+        break;
+    }
+    frame_copy_free(&frame);
+    return ret;
+}
+
 static void usage(const char *prog)
 {
     printf("Usage: %s [options]\n"
@@ -218,10 +292,12 @@ static void usage(const char *prog)
            "  -H, --height N          frame height (default %d)\n"
            "  -f, --fps N             frame rate (default %d)\n"
            "  -p, --port N            HTTP port (default %d)\n"
+           "  -c, --max-clients N     maximum HTTP clients at once (default %d)\n"
            "  -s, --snapshot FILE     save one frame to FILE and exit\n"
            "  -v, --version           print the version and exit\n"
            "  -h, --help              print this help and exit\n",
-           prog, DEFAULT_DEVICE, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS, DEFAULT_PORT);
+           prog, DEFAULT_DEVICE, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS, DEFAULT_PORT,
+           DEFAULT_MAX_CLIENTS);
 }
 
 static int parse_positive(const char *arg, unsigned int *out)
@@ -245,6 +321,7 @@ int main(int argc, char *argv[])
         { "height",   required_argument, NULL, 'H' },
         { "fps",      required_argument, NULL, 'f' },
         { "port",     required_argument, NULL, 'p' },
+        { "max-clients", required_argument, NULL, 'c' },
         { "snapshot", required_argument, NULL, 's' },
         { "version",  no_argument,       NULL, 'v' },
         { "help",     no_argument,       NULL, 'h' },
@@ -257,7 +334,10 @@ int main(int argc, char *argv[])
         .fps = DEFAULT_FPS,
     };
     unsigned int port = DEFAULT_PORT;
+    unsigned int max_clients = DEFAULT_MAX_CLIENTS;
     struct http_server *srv = NULL;
+    struct capture_thread_args capture_args;
+    pthread_t capture_tid;
     const char *snapshot_path = NULL;
     int run_as_daemon = 0;
     struct frame_store store;
@@ -265,7 +345,7 @@ int main(int argc, char *argv[])
     int opt;
     int ret;
 
-    while ((opt = getopt_long(argc, argv, "dD:W:H:f:p:s:vh", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "dD:W:H:f:p:c:s:vh", long_options, NULL)) != -1) {
         switch (opt) {
         case 'd':
             run_as_daemon = 1;
@@ -287,6 +367,12 @@ int main(int argc, char *argv[])
         case 'p':
             if (parse_positive(optarg, &port) == -1 || port > 65535) {
                 fprintf(stderr, "Invalid port: %s\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
+        case 'c':
+            if (parse_positive(optarg, &max_clients) == -1 || max_clients > MAX_CLIENTS_LIMIT) {
+                fprintf(stderr, "Invalid client limit (1 to %d): %s\n", MAX_CLIENTS_LIMIT, optarg);
                 return EXIT_FAILURE;
             }
             break;
@@ -317,27 +403,57 @@ int main(int argc, char *argv[])
     setup_signals();
     syslog(LOG_INFO, "camera-server %s starting", VERSION);
 
+    if (frame_store_init(&store) == -1) {
+        closelog();
+        return EXIT_FAILURE;
+    }
+
     cap = capture_open(&cfg);
     if (cap == NULL) {
+        frame_store_destroy(&store);
         closelog();
         return EXIT_FAILURE;
     }
 
     if (snapshot_path == NULL) {
-        srv = http_server_open((unsigned short)port);
+        srv = http_server_open((unsigned short)port, max_clients, &store);
         if (srv == NULL) {
             capture_close(cap);
+            frame_store_destroy(&store);
             closelog();
             return EXIT_FAILURE;
         }
     }
 
-    frame_store_init(&store);
-    ret = run(cap, &store, srv, snapshot_path);
+    capture_args.cap = cap;
+    capture_args.store = &store;
+    capture_args.result = 0;
+    if (start_capture_thread(&capture_tid, &capture_args) == -1) {
+        http_server_close(srv);
+        capture_close(cap);
+        frame_store_destroy(&store);
+        closelog();
+        return EXIT_FAILURE;
+    }
 
+    if (snapshot_path != NULL) {
+        ret = save_snapshot(&store, snapshot_path);
+    } else {
+        serve(srv);
+        ret = 0;
+    }
+
+    /* Stop the producer, wake all readers, then disconnect and join the clients */
+    atomic_store(&capture_stop, 1);
+    frame_store_shutdown(&store);
     http_server_close(srv);
+    pthread_join(capture_tid, NULL);
+    if (capture_args.result == -1) {
+        ret = -1;
+    }
+
     capture_close(cap);
-    frame_store_free(&store);
+    frame_store_destroy(&store);
     syslog(LOG_INFO, "camera-server stopped%s", ret == 0 ? "" : " after an error");
     closelog();
     return ret == 0 ? EXIT_SUCCESS : EXIT_FAILURE;

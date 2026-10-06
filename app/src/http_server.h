@@ -1,47 +1,41 @@
 /**
  * @file http_server.h
- * @brief Single-client HTTP server for the live MJPEG stream, driven by the main poll() loop.
+ * @brief HTTP server for the live MJPEG stream, with one thread per client.
  *
  * Paths: "/" (HTML page showing the stream), "/stream" (multipart/x-mixed-replace MJPEG),
- * "/snapshot.jpg" (newest frame). One client is served at a time; other connections receive
- * 503 Service Unavailable. All sockets are non-blocking.
+ * "/snapshot.jpg" (newest frame). The caller runs the accept loop: it waits for the listening
+ * socket to become readable, then calls http_server_accept(). Connections beyond the client
+ * limit receive 503 Service Unavailable.
  */
 
 #ifndef HTTP_SERVER_H
 #define HTTP_SERVER_H
 
-#include <poll.h>
-
 #include "frame_store.h"
-
-/* Listening socket plus at most one client */
-#define HTTP_SERVER_MAX_POLLFDS 2
 
 struct http_server;
 
 /**
- * Create the listening socket on all interfaces.
+ * Create the non-blocking listening socket on all interfaces.
+ * @param store frame store that client threads read frames from
  * @return the server, or NULL on error (logged to syslog)
  */
-struct http_server *http_server_open(unsigned short port);
+struct http_server *http_server_open(unsigned short port, unsigned int max_clients,
+                                     struct frame_store *store);
+
+/** Listening socket, readable (POLLIN) when connections are waiting. */
+int http_server_listen_fd(const struct http_server *srv);
+
+/** Join finished client threads, then accept every waiting connection and start its thread. */
+void http_server_accept(struct http_server *srv);
+
+/** Join client threads that have finished. Call regularly from the accept loop. */
+void http_server_reap(struct http_server *srv);
 
 /**
- * Fill in the descriptors the server needs to wait on.
- * @return number of entries written, at most HTTP_SERVER_MAX_POLLFDS
+ * Disconnect all clients, join their threads, close the listening socket and free the server.
+ * Call frame_store_shutdown() first so streaming clients stop waiting for frames.
  */
-int http_server_pollfds(struct http_server *srv, struct pollfd *fds);
-
-/** Handle the poll() results for the entries filled in by http_server_pollfds(). */
-void http_server_handle(struct http_server *srv, const struct pollfd *fds, int count,
-                        const struct frame_store *store);
-
-/** Send a newly captured frame to a streaming client, skipping it if the client is behind. */
-void http_server_new_frame(struct http_server *srv, const struct frame_store *store);
-
-/** Drop a client whose request or stream has stalled. Call at least once a second. */
-void http_server_check_timeouts(struct http_server *srv);
-
-/** Disconnect the client, close the listening socket and free the server. */
 void http_server_close(struct http_server *srv);
 
 #endif /* HTTP_SERVER_H */
