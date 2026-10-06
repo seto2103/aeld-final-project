@@ -19,7 +19,8 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 | 3 | [#9 Pre-event ring buffer and motion-triggered clip recording to a recordings partition](https://github.com/seto2103/aeld-final-project/issues/9) | #8 | Not started |
 | 3 | [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10) | #7, #9 | Not started |
 | 3 | [#11 camera-supervisor restarts camera-server after a failure and feeds the hardware watchdog](https://github.com/seto2103/aeld-final-project/issues/11) | #6 | Not started |
-| 3 | [#12 Network time, recording rotation, full image check, demo video and wiki update](https://github.com/seto2103/aeld-final-project/issues/12) | #9, #10, #11 | Not started |
+| 3 | [#12 Network time, recording rotation, full image check and wiki update](https://github.com/seto2103/aeld-final-project/issues/12) | #9, #10, #11 | Not started |
+| 3 | [#13 Demo video of the finished security camera](https://github.com/seto2103/aeld-final-project/issues/13) | #12 | Not started |
 
 ## Sprint 1
 
@@ -53,4 +54,5 @@ clips are written.
 * [#9 Pre-event ring buffer and motion-triggered clip recording to a recordings partition](https://github.com/seto2103/aeld-final-project/issues/9)
 * [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10)
 * [#11 camera-supervisor restarts camera-server after a failure and feeds the hardware watchdog](https://github.com/seto2103/aeld-final-project/issues/11)
-* [#12 Network time, recording rotation, full image check, demo video and wiki update](https://github.com/seto2103/aeld-final-project/issues/12)
+* [#12 Network time, recording rotation, full image check and wiki update](https://github.com/seto2103/aeld-final-project/issues/12)
+* [#13 Demo video of the finished security camera](https://github.com/seto2103/aeld-final-project/issues/13)

@@ -1,4 +1,4 @@
-Title: Network time, recording rotation, full image check, demo video and wiki update
+Title: Network time, recording rotation, full image check and wiki update
 
 Sprint: 3
 Assignee: seto2103
@@ -8,7 +8,8 @@ Blocked by: #9 (motion-triggered recording), #10 (status LED integration), #11 (
 
 Finish the project so it runs unattended from a freshly written SD card: the clock is set from
 the network so clip names have the right time, old recordings are deleted before the partition
-fills, and everything starts at boot. Then record the demo and update the documentation.
+fills, and everything starts at boot. Then update the documentation for the finished system.
+The demo video is a separate issue.
 
 ## Definition of Done
 
@@ -20,11 +21,8 @@ fills, and everything starts at boot. Then record the demo and update the docume
 - [ ] A freshly built image written to an SD card boots and, with no manual steps, creates the
       recordings partition, sets the clock, starts streaming, lights the LED and records on
       motion.
-- [ ] A demo video shows the live stream in a browser, a motion-triggered recording with the 5
-      seconds before the motion, the LED blinking while recording, and recovery after the
-      camera is unplugged.
 - [ ] The README and the wiki pages describe the finished system, the recordings and how to
-      copy them off the Pi, and the Schedule marks all issues done.
+      copy them off the Pi.
 
 ## Status
 
