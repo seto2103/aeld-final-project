@@ -17,7 +17,7 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 | 2 | [#7 Status LED driver controls the onboard ACT LED (on, off, blink) with a device tree overlay](https://github.com/seto2103/aeld-final-project/issues/7) | #3 | Done |
 | 3 | [#8 Motion detection thread compares downscaled frames and reports motion start and end](https://github.com/seto2103/aeld-final-project/issues/8) | #6 | Done |
 | 3 | [#9 Pre-event ring buffer, motion-triggered clip recording and rotation on a recordings partition](https://github.com/seto2103/aeld-final-project/issues/9) | #8 | Done |
-| 3 | [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10) | #7, #9 | Not started |
+| 3 | [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10) | #7, #9 | Done |
 | 3 | [#11 camera-supervisor restarts camera-server after a failure and feeds the hardware watchdog](https://github.com/seto2103/aeld-final-project/issues/11) | #6 | Not started |
 | 3 | [#12 Network time, full image check and wiki update](https://github.com/seto2103/aeld-final-project/issues/12) | #9, #10, #11 | Not started |
 | 3 | [#13 Demo video of the finished security camera](https://github.com/seto2103/aeld-final-project/issues/13) | #12 | Not started |

@@ -252,9 +252,11 @@ static void clip_close(const struct recorder *r, struct clip *clip)
  * Record one motion event, from the pre-event frames until motion has ended.
  * @param newest newest frame in the ring when motion started; the clip starts pre_event_frames
  *        before it, even if making space took a while
+ * @return 0 when the event was recorded to its end, -1 if recording failed (logged)
  */
-static void record_event(struct recorder *r, uint64_t newest)
+static int record_event(struct recorder *r, uint64_t newest)
 {
+    int result = 0;
     struct frame_copy frame = { 0 };
     struct clip clip = { 0 };
     uint64_t seq = newest > r->cfg.pre_event_frames ? newest - r->cfg.pre_event_frames + 1 : 1;
@@ -263,10 +265,11 @@ static void record_event(struct recorder *r, uint64_t newest)
     time_t start_time = time(NULL) - (time_t)((frame_ring_newest(r->ring) - seq + 1) / r->cfg.fps);
 
     if (clip_open(r, &clip, start_time) == -1) {
-        return;
+        return -1;
     }
     syslog(LOG_INFO, "Recording %s, starting %llu frames before the motion", clip.path,
            (unsigned long long)(newest - seq + 1));
+    led_set(r->cfg.led, STATUS_LED_MODE_BLINK);
 
     while (!atomic_load(&r->stop)) {
         int ret;
@@ -297,15 +300,18 @@ static void record_event(struct recorder *r, uint64_t newest)
                    clip.path);
             clip_close(r, &clip);
             if (clip_open(r, &clip, time(NULL)) == -1) {
+                result = -1;
                 break;
             }
         }
         if (avi_write_frame(clip.avi, frame.data, frame.len) == -1) {
+            result = -1;
             break;
         }
         /* Once a second, delete old clips if the partition is filling up */
         if (avi_frames(clip.avi) % r->cfg.fps == 0 && make_space(r, clip.part_path) == -1) {
             syslog(LOG_WARNING, "Closing %s early: out of space", clip.path);
+            result = -1;
             break;
         }
     }
@@ -313,7 +319,10 @@ static void record_event(struct recorder *r, uint64_t newest)
     if (clip.avi != NULL) {
         clip_close(r, &clip);
     }
+    /* Back to steady on; when the daemon is stopping, main turns it off after this */
+    led_set(r->cfg.led, STATUS_LED_MODE_ON);
     frame_copy_free(&frame);
+    return result;
 }
 
 static void *recorder_thread(void *arg)
@@ -329,8 +338,10 @@ static void *recorder_thread(void *arg)
 
         /* Note where the motion started before deleting old clips, which can take a while */
         newest = frame_ring_newest(r->ring);
-        if (check_dir(r) == 0) {
-            record_event(r, newest);
+        if (check_dir(r) == 0 && record_event(r, newest) == 0) {
+            /* Recorded to the end. If new motion started while the clip was being closed, the
+             * next pass records it, with its pre-event frames still in the ring. */
+            continue;
         }
         /* After an error, or if recording is disabled, don't retry until the next event */
         while (!atomic_load(&r->stop) && motion_active(r->motion)) {

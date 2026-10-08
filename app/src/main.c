@@ -9,6 +9,7 @@
  *   recorder thread - reads every frame from the frame ring and saves a clip per motion event
  *   main thread    - runs the accept loop, handles SIGINT and SIGTERM, and stops and joins the
  *                    others on exit
+ * The status LED is on while capturing, blinks while a clip is recorded, and is off once stopped.
  * Worker threads block SIGINT and SIGTERM, so signals always reach the main thread.
  * Signal and daemon handling are based on the aesdsocket assignment.
  */
@@ -29,6 +30,7 @@
 #include "capture.h"
 #include "frame_store.h"
 #include "http_server.h"
+#include "led.h"
 #include "frame_ring.h"
 #include "motion.h"
 #include "recorder.h"
@@ -364,6 +366,7 @@ int main(int argc, char *argv[])
     const char *record_dir = DEFAULT_RECORD_DIR;
     unsigned int record_free = DEFAULT_RECORD_FREE_PERCENT;
     struct recorder *recorder = NULL;
+    struct led *led = NULL;
     struct frame_ring ring;
     int have_ring = 0;
     struct capture_thread_args capture_args;
@@ -507,6 +510,9 @@ int main(int argc, char *argv[])
     if (snapshot_path != NULL) {
         ret = save_snapshot(&store, snapshot_path);
     } else {
+        /* Steady on while capturing, blinking while recording, off once stopped */
+        led = led_open(LED_DEVICE);
+        led_set(led, STATUS_LED_MODE_ON);
         motion = motion_start(&motion_cfg, &store);
         if (motion != NULL && have_ring) {
             struct recorder_config rec_cfg = { .dir = record_dir };
@@ -514,6 +520,7 @@ int main(int argc, char *argv[])
             capture_get_format(cap, &rec_cfg.width, &rec_cfg.height, &rec_cfg.fps);
             rec_cfg.pre_event_frames = PRE_EVENT_SECONDS * rec_cfg.fps;
             rec_cfg.free_percent = record_free;
+            rec_cfg.led = led;
             recorder = recorder_start(&rec_cfg, &ring, motion);
         } else if (motion != NULL) {
             syslog(LOG_INFO, "Recording disabled by --record-dir \"\"");
@@ -535,6 +542,7 @@ int main(int argc, char *argv[])
     recorder_stop(recorder);
     motion_stop(motion);
     pthread_join(capture_tid, NULL);
+    led_close(led);
     if (capture_args.result == -1) {
         ret = -1;
     }

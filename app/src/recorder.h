@@ -8,6 +8,7 @@
 #define RECORDER_H
 
 #include "frame_ring.h"
+#include "led.h"
 #include "motion.h"
 
 struct recorder_config {
@@ -17,6 +18,7 @@ struct recorder_config {
     unsigned int fps;
     unsigned int pre_event_frames;  /* frames from before the motion at the start of a clip */
     unsigned int free_percent;      /* oldest clips are deleted to keep this much space free */
+    struct led *led;                /* blinks while a clip is being written; may be NULL */
 };
 
 struct recorder;

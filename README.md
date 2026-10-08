@@ -95,7 +95,15 @@ scp -O 'root@<pi-address>:/data/recordings/*.avi' .
 
 ## Status LED
 
-The onboard green ACT LED is the camera's status light. A device tree overlay
+The onboard green ACT LED is the camera's status light:
+
+| LED | Meaning |
+| --- | --- |
+| Steady on | `camera-server` is capturing |
+| Blinking | A motion clip is being recorded |
+| Off | `camera-server` is not running, for example after the camera was unplugged |
+
+A device tree overlay
 (`driver/dts/status-led-overlay.dts`, enabled with `dtoverlay=status-led` in `config.txt`) takes it
 away from the SD card activity trigger, and the `status_led` driver, loaded at boot, controls it
 through `/dev/status_led`:
@@ -105,7 +113,8 @@ echo blink > /dev/status_led    # also on, off
 cat /dev/status_led             # prints the current mode
 ```
 
-Programs can also set the mode and blink period with the ioctls in `driver/status_led_ioctl.h`.
+`camera-server` sets the LED with the ioctls in `driver/status_led_ioctl.h`, so a mode written by
+hand only lasts until its next change. Without the driver, `camera-server` runs without the LED.
 
 ## Source layout
 
