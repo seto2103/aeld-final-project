@@ -1,0 +1,93 @@
+#!/bin/sh
+#
+# Recordings partition: on first boot, partition 3 is created from the free space after the
+# root filesystem and formatted ext4. On every boot it is checked and mounted at /data, and
+# camera-server saves clips in /data/recordings.
+#
+# A partition is only ever formatted right after this script created it, so existing
+# recordings are never erased.
+
+DISK=/dev/mmcblk0
+PART=/dev/mmcblk0p3
+MOUNTPOINT=/data
+SYS=/sys/block/mmcblk0
+# Don't create a partition smaller than 1 GiB (in 512 byte sectors)
+MIN_SECTORS=2097152
+
+create_partition() {
+    root_end=$(( $(cat $SYS/mmcblk0p2/start) + $(cat $SYS/mmcblk0p2/size) ))
+    # Start on a 4 MiB boundary, which suits SD card erase blocks
+    first=$(( (root_end + 8191) / 8192 * 8192 ))
+    total=$(cat $SYS/size)
+    if [ $((total - first)) -lt $MIN_SECTORS ]; then
+        echo "not enough free space on $DISK"
+        return 1
+    fi
+
+    # new, primary, number 3, first sector, last sector (default: end of the card), write.
+    # fdisk can't make the kernel reread the table while the root partition is mounted and
+    # reports an error for that, so its exit status is not checked.
+    printf 'n\np\n3\n%s\n\nw\n' "$first" | fdisk -u $DISK > /dev/null 2>&1
+    # Tell the kernel about just the new partition
+    partx -a -n 3 $DISK || return 1
+
+    # devtmpfs creates the device node once the kernel has added the partition
+    i=0
+    while [ ! -b $PART ] && [ $i -lt 20 ]; do
+        sleep 0.1
+        i=$((i + 1))
+    done
+    [ -b $PART ] || return 1
+
+    mkfs.ext4 -q -L recordings $PART
+}
+
+start() {
+    printf "Mounting recordings partition: "
+    if [ ! -b $PART ]; then
+        echo "creating $PART"
+        if ! create_partition; then
+            echo "Creating $PART failed, recording disabled"
+            return 0
+        fi
+    fi
+
+    # Repair what can be repaired automatically, for example after a power cut
+    fsck.ext4 -p $PART > /dev/null
+    if [ $? -ge 4 ]; then
+        echo "FAIL: $PART has errors fsck can't fix, recording disabled"
+        return 0
+    fi
+
+    mkdir -p $MOUNTPOINT
+    if mount -t ext4 -o noatime $PART $MOUNTPOINT; then
+        mkdir -p $MOUNTPOINT/recordings
+        echo "OK"
+    else
+        echo "FAIL, recording disabled"
+    fi
+}
+
+stop() {
+    printf "Unmounting recordings partition: "
+    umount $MOUNTPOINT 2> /dev/null && echo "OK" || echo "not mounted"
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        stop
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

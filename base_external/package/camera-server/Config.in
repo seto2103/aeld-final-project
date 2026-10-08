@@ -3,6 +3,10 @@ config BR2_PACKAGE_CAMERA_SERVER
 	depends on BR2_TOOLCHAIN_HAS_THREADS
 	depends on BR2_PACKAGE_STATUS_LED # status_led_ioctl.h
 	select BR2_PACKAGE_JPEG
+	# Recordings partition: mkfs.ext4 and fsck.ext4, and partx to add the partition at runtime
+	select BR2_PACKAGE_E2FSPROGS
+	select BR2_PACKAGE_UTIL_LINUX
+	select BR2_PACKAGE_UTIL_LINUX_PARTX
 	help
 	  Network security camera daemon: V4L2 capture, MJPEG streaming over HTTP and
 	  motion-triggered recording. Source in app/ of the project repository.

@@ -18,6 +18,7 @@ define CAMERA_SERVER_INSTALL_TARGET_CMDS
 endef
 
 define CAMERA_SERVER_INSTALL_INIT_SYSV
+	$(INSTALL) -D -m 0755 $(@D)/init/S20recordings $(TARGET_DIR)/etc/init.d/S20recordings
 	$(INSTALL) -D -m 0755 $(@D)/init/S90camera-server $(TARGET_DIR)/etc/init.d/S90camera-server
 endef
 

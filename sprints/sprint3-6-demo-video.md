@@ -2,7 +2,7 @@ Title: Demo video of the finished security camera
 
 Sprint: 3
 Assignee: seto2103
-Blocked by: #12 (network time, recording rotation, full image check)
+Blocked by: #12 (network time, full image check)
 
 ## Description
 

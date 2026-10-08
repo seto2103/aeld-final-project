@@ -57,6 +57,12 @@ void frame_store_shutdown(struct frame_store *store);
 /** Free the store. No thread may be using it. */
 void frame_store_destroy(struct frame_store *store);
 
+/**
+ * Copy a frame into copy, growing its buffer if needed.
+ * @return 0 on success, -1 if memory could not be allocated (logged)
+ */
+int frame_copy_set(struct frame_copy *copy, const void *data, size_t len, uint64_t seq);
+
 void frame_copy_free(struct frame_copy *copy);
 
 #endif /* FRAME_STORE_H */

@@ -99,13 +99,8 @@ int frame_store_wait_newer(struct frame_store *store, uint64_t after_seq, struct
         ret = -1;
     } else if (store->seq <= after_seq) {
         ret = 1;
-    } else if (reserve(&out->data, &out->capacity, store->len) == -1) {
-        syslog(LOG_ERR, "Out of memory copying a %zu byte frame", store->len);
+    } else if (frame_copy_set(out, store->data, store->len, store->seq) == -1) {
         ret = -1;
-    } else {
-        memcpy(out->data, store->data, store->len);
-        out->len = store->len;
-        out->seq = store->seq;
     }
     pthread_mutex_unlock(&store->lock);
     return ret;
@@ -125,6 +120,18 @@ void frame_store_destroy(struct frame_store *store)
     pthread_mutex_destroy(&store->lock);
     free(store->data);
     store->data = NULL;
+}
+
+int frame_copy_set(struct frame_copy *copy, const void *data, size_t len, uint64_t seq)
+{
+    if (reserve(&copy->data, &copy->capacity, len) == -1) {
+        syslog(LOG_ERR, "Out of memory copying a %zu byte frame", len);
+        return -1;
+    }
+    memcpy(copy->data, data, len);
+    copy->len = len;
+    copy->seq = seq;
+    return 0;
 }
 
 void frame_copy_free(struct frame_copy *copy)

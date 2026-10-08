@@ -73,6 +73,26 @@ grep -E "Motion (started|ended)" /var/log/messages
 The thresholds can be changed with `--motion-percent`, `--motion-pixel` and `--motion-holdoff`.
 The highest score every 10 seconds is logged at debug level, which helps when choosing them.
 
+## Recordings
+
+Each motion event is saved as an MJPEG AVI clip in `/data/recordings`, starting 5 seconds before
+the motion and ending 3 seconds after it, named by its start time (for example
+`2026-11-02_14-03-27.avi`). Clips play in VLC. A clip that is still being written ends in
+`.avi.part`, and one longer than 1 GB (about 3.5 minutes) continues in a new file.
+
+`/data` is the third partition of the SD card. On the first boot after writing the image, the
+`S20recordings` init script creates it from the free space after the root filesystem and formats
+it ext4; on later boots it is checked and mounted. When less than 10% of it is free, the oldest
+clips are deleted (change with `--record-free`).
+
+To copy the clips to your computer:
+
+```
+scp -O 'root@<pi-address>:/data/recordings/*.avi' .
+```
+
+`--record-dir` changes the directory, and `--record-dir ""` turns recording off.
+
 ## Status LED
 
 The onboard green ACT LED is the camera's status light. A device tree overlay

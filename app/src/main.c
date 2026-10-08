@@ -6,6 +6,7 @@
  *   capture thread - owns the V4L2 device and is the only writer to the frame store
  *   client threads - one per HTTP connection, started by the HTTP server, read the frame store
  *   motion thread  - reads the frame store and reports when motion starts and ends
+ *   recorder thread - reads every frame from the frame ring and saves a clip per motion event
  *   main thread    - runs the accept loop, handles SIGINT and SIGTERM, and stops and joins the
  *                    others on exit
  * Worker threads block SIGINT and SIGTERM, so signals always reach the main thread.
@@ -28,7 +29,9 @@
 #include "capture.h"
 #include "frame_store.h"
 #include "http_server.h"
+#include "frame_ring.h"
 #include "motion.h"
+#include "recorder.h"
 #include "thread_util.h"
 
 #define DEFAULT_DEVICE              "/dev/video0"
@@ -37,6 +40,12 @@
 #define DEFAULT_FPS                 30
 #define DEFAULT_PORT                8080
 #define DEFAULT_MAX_CLIENTS         4
+#define DEFAULT_RECORD_DIR          "/data/recordings"
+#define DEFAULT_RECORD_FREE_PERCENT 10
+/* Seconds of video from before the motion at the start of each clip */
+#define PRE_EVENT_SECONDS           5
+/* Extra seconds the frame ring holds, so a slow SD card write doesn't lose frames */
+#define RING_SLACK_SECONDS          5
 #define MAX_CLIENTS_LIMIT           32
 
 /* getopt_long values for options that only have a long form */
@@ -44,6 +53,8 @@ enum {
     OPT_MOTION_PIXEL = 256,
     OPT_MOTION_PERCENT,
     OPT_MOTION_HOLDOFF,
+    OPT_RECORD_DIR,
+    OPT_RECORD_FREE,
 };
 
 /* How often the capture and accept loops check whether to stop */
@@ -64,6 +75,7 @@ static atomic_int capture_finished;
 struct capture_thread_args {
     struct capture *cap;
     struct frame_store *store;
+    struct frame_ring *ring;        /* NULL in snapshot mode */
     int result;             /* 0 if stopped on request, -1 if the camera failed */
 };
 
@@ -148,10 +160,10 @@ static int write_file(const char *path, const void *data, size_t len)
 }
 
 /**
- * Capture frames into the store until capture_stop is set.
+ * Capture frames into the store, and the ring if there is one, until capture_stop is set.
  * @return 0 when stopped on request, -1 if the camera failed
  */
-static int capture_loop(struct capture *cap, struct frame_store *store)
+static int capture_loop(struct capture *cap, struct frame_store *store, struct frame_ring *ring)
 {
     double last_frame_time = monotonic_seconds();
     double rate_start = last_frame_time;
@@ -192,7 +204,8 @@ static int capture_loop(struct capture *cap, struct frame_store *store)
             return -1;
         }
 
-        if (frame_store_put(store, data, len) == -1) {
+        if (frame_store_put(store, data, len) == -1 ||
+            (ring != NULL && frame_ring_push(ring, data, len) == -1)) {
             syslog(LOG_ERR, "Out of memory storing a %zu byte frame", len);
             capture_release(cap);
             return -1;
@@ -217,9 +230,12 @@ static void *capture_thread(void *arg)
 {
     struct capture_thread_args *args = arg;
 
-    args->result = capture_loop(args->cap, args->store);
+    args->result = capture_loop(args->cap, args->store, args->ring);
     /* No more frames are coming: wake every reader, and tell the main thread to stop */
     frame_store_shutdown(args->store);
+    if (args->ring != NULL) {
+        frame_ring_shutdown(args->ring);
+    }
     atomic_store(&capture_finished, 1);
     return NULL;
 }
@@ -287,12 +303,15 @@ static void usage(const char *prog)
            "      --motion-pixel N    brightness change (1-255) that counts a pixel as changed\n"
            "                          (default %d)\n"
            "      --motion-holdoff MS motion ends after this long without motion (default %d)\n"
+           "      --record-dir DIR    save motion clips in DIR, \"\" to disable (default %s)\n"
+           "      --record-free P     delete the oldest clips to keep P%% of the space free\n"
+           "                          (default %d)\n"
            "  -s, --snapshot FILE     save one frame to FILE and exit\n"
            "  -v, --version           print the version and exit\n"
            "  -h, --help              print this help and exit\n",
            prog, DEFAULT_DEVICE, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS, DEFAULT_PORT,
            DEFAULT_MAX_CLIENTS, MOTION_DEFAULT_TRIGGER_PERCENT, MOTION_DEFAULT_PIXEL_THRESHOLD,
-           MOTION_DEFAULT_HOLDOFF_MS);
+           MOTION_DEFAULT_HOLDOFF_MS, DEFAULT_RECORD_DIR, DEFAULT_RECORD_FREE_PERCENT);
 }
 
 static int parse_positive(const char *arg, unsigned int *out)
@@ -320,6 +339,8 @@ int main(int argc, char *argv[])
         { "motion-percent", required_argument, NULL, OPT_MOTION_PERCENT },
         { "motion-pixel", required_argument, NULL, OPT_MOTION_PIXEL },
         { "motion-holdoff", required_argument, NULL, OPT_MOTION_HOLDOFF },
+        { "record-dir", required_argument, NULL, OPT_RECORD_DIR },
+        { "record-free", required_argument, NULL, OPT_RECORD_FREE },
         { "snapshot", required_argument, NULL, 's' },
         { "version",  no_argument,       NULL, 'v' },
         { "help",     no_argument,       NULL, 'h' },
@@ -340,6 +361,11 @@ int main(int argc, char *argv[])
         .holdoff_ms = MOTION_DEFAULT_HOLDOFF_MS,
     };
     struct motion *motion = NULL;
+    const char *record_dir = DEFAULT_RECORD_DIR;
+    unsigned int record_free = DEFAULT_RECORD_FREE_PERCENT;
+    struct recorder *recorder = NULL;
+    struct frame_ring ring;
+    int have_ring = 0;
     struct capture_thread_args capture_args;
     pthread_t capture_tid;
     const char *snapshot_path = NULL;
@@ -405,6 +431,15 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             break;
+        case OPT_RECORD_DIR:
+            record_dir = optarg;
+            break;
+        case OPT_RECORD_FREE:
+            if (parse_positive(optarg, &record_free) == -1 || record_free > 95) {
+                fprintf(stderr, "Invalid free space percentage (1 to 95): %s\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
         case 's':
             snapshot_path = optarg;
             break;
@@ -432,6 +467,7 @@ int main(int argc, char *argv[])
     setup_signals();
     syslog(LOG_INFO, "camera-server %s starting", VERSION);
 
+    ret = -1;
     if (frame_store_init(&store) == -1) {
         closelog();
         return EXIT_FAILURE;
@@ -439,57 +475,78 @@ int main(int argc, char *argv[])
 
     cap = capture_open(&cfg);
     if (cap == NULL) {
-        frame_store_destroy(&store);
-        closelog();
-        return EXIT_FAILURE;
+        goto out_store;
     }
 
     if (snapshot_path == NULL) {
+        unsigned int width, height, fps;
+
+        capture_get_format(cap, &width, &height, &fps);
+        if (*record_dir != '\0') {
+            if (frame_ring_init(&ring, (PRE_EVENT_SECONDS + RING_SLACK_SECONDS) * fps) == -1) {
+                goto out_capture;
+            }
+            have_ring = 1;
+        }
         srv = http_server_open((unsigned short)port, max_clients, &store);
         if (srv == NULL) {
-            capture_close(cap);
-            frame_store_destroy(&store);
-            closelog();
-            return EXIT_FAILURE;
+            goto out_capture;
         }
     }
 
     capture_args.cap = cap;
     capture_args.store = &store;
+    capture_args.ring = have_ring ? &ring : NULL;
     capture_args.result = 0;
     rc = thread_create_signals_blocked(&capture_tid, capture_thread, &capture_args);
     if (rc != 0) {
         syslog(LOG_ERR, "pthread_create for capture failed: %s", strerror(rc));
-        http_server_close(srv);
-        capture_close(cap);
-        frame_store_destroy(&store);
-        closelog();
-        return EXIT_FAILURE;
+        goto out_server;
     }
 
     if (snapshot_path != NULL) {
         ret = save_snapshot(&store, snapshot_path);
     } else {
         motion = motion_start(&motion_cfg, &store);
-        if (motion != NULL) {
+        if (motion != NULL && have_ring) {
+            struct recorder_config rec_cfg = { .dir = record_dir };
+
+            capture_get_format(cap, &rec_cfg.width, &rec_cfg.height, &rec_cfg.fps);
+            rec_cfg.pre_event_frames = PRE_EVENT_SECONDS * rec_cfg.fps;
+            rec_cfg.free_percent = record_free;
+            recorder = recorder_start(&rec_cfg, &ring, motion);
+        } else if (motion != NULL) {
+            syslog(LOG_INFO, "Recording disabled by --record-dir \"\"");
+        }
+        if (motion != NULL && (recorder != NULL || !have_ring)) {
             serve(srv);
             ret = 0;
-        } else {
-            ret = -1;
         }
     }
 
-    /* Stop the producer, wake all readers, then disconnect and join the clients */
+    /* Stop the producer, wake all readers, then disconnect and join the clients and consumers */
     atomic_store(&capture_stop, 1);
     frame_store_shutdown(&store);
+    if (have_ring) {
+        frame_ring_shutdown(&ring);
+    }
     http_server_close(srv);
+    srv = NULL;
+    recorder_stop(recorder);
     motion_stop(motion);
     pthread_join(capture_tid, NULL);
     if (capture_args.result == -1) {
         ret = -1;
     }
 
+out_server:
+    http_server_close(srv);
+out_capture:
+    if (have_ring) {
+        frame_ring_destroy(&ring);
+    }
     capture_close(cap);
+out_store:
     frame_store_destroy(&store);
     syslog(LOG_INFO, "camera-server stopped%s", ret == 0 ? "" : " after an error");
     closelog();
