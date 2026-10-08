@@ -59,6 +59,20 @@ The root password is `root`.
 Up to 4 clients can watch at once (change with `-c`); further connections receive `503 Service
 Unavailable`. Run `camera-server --help` for the command line options.
 
+## Motion detection
+
+`camera-server` checks about 10 frames per second for motion, comparing a 160x90 grayscale
+version of each frame with a slowly updated background. Motion starts when at least 1% of the
+pixels have changed for about half a second, and ends 3 seconds after the changes stop. Events
+are logged to syslog:
+
+```
+grep -E "Motion (started|ended)" /var/log/messages
+```
+
+The thresholds can be changed with `--motion-percent`, `--motion-pixel` and `--motion-holdoff`.
+The highest score every 10 seconds is logged at debug level, which helps when choosing them.
+
 ## Status LED
 
 The onboard green ACT LED is the camera's status light. A device tree overlay

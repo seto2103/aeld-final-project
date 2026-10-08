@@ -13,12 +13,12 @@
 #define _GNU_SOURCE
 
 #include "http_server.h"
+#include "thread_util.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -318,22 +318,6 @@ static void reject_busy(int fd, const char *addr)
     close(fd);
 }
 
-/** Start a client thread with SIGINT and SIGTERM blocked, so only the main thread handles them. */
-static int start_client_thread(struct http_client *c)
-{
-    sigset_t block;
-    sigset_t old;
-    int rc;
-
-    sigemptyset(&block);
-    sigaddset(&block, SIGINT);
-    sigaddset(&block, SIGTERM);
-    pthread_sigmask(SIG_BLOCK, &block, &old);
-    rc = pthread_create(&c->thread, NULL, client_thread, c);
-    pthread_sigmask(SIG_SETMASK, &old, NULL);
-    return rc;
-}
-
 struct http_server *http_server_open(unsigned short port, unsigned int max_clients,
                                      struct frame_store *store)
 {
@@ -427,7 +411,7 @@ void http_server_accept(struct http_server *srv)
         atomic_init(&c->thread_complete, 0);
         memcpy(c->addr, addr_str, sizeof(addr_str));
 
-        rc = start_client_thread(c);
+        rc = thread_create_signals_blocked(&c->thread, client_thread, c);
         if (rc != 0) {
             syslog(LOG_ERR, "pthread_create for client %s failed: %s", addr_str, strerror(rc));
             reject_busy(fd, addr_str);

@@ -5,6 +5,7 @@
  * Threads:
  *   capture thread - owns the V4L2 device and is the only writer to the frame store
  *   client threads - one per HTTP connection, started by the HTTP server, read the frame store
+ *   motion thread  - reads the frame store and reports when motion starts and ends
  *   main thread    - runs the accept loop, handles SIGINT and SIGTERM, and stops and joins the
  *                    others on exit
  * Worker threads block SIGINT and SIGTERM, so signals always reach the main thread.
@@ -27,6 +28,8 @@
 #include "capture.h"
 #include "frame_store.h"
 #include "http_server.h"
+#include "motion.h"
+#include "thread_util.h"
 
 #define DEFAULT_DEVICE              "/dev/video0"
 #define DEFAULT_WIDTH               1280
@@ -35,6 +38,13 @@
 #define DEFAULT_PORT                8080
 #define DEFAULT_MAX_CLIENTS         4
 #define MAX_CLIENTS_LIMIT           32
+
+/* getopt_long values for options that only have a long form */
+enum {
+    OPT_MOTION_PIXEL = 256,
+    OPT_MOTION_PERCENT,
+    OPT_MOTION_HOLDOFF,
+};
 
 /* How often the capture and accept loops check whether to stop */
 #define POLL_TIMEOUT_MS             500
@@ -214,26 +224,6 @@ static void *capture_thread(void *arg)
     return NULL;
 }
 
-/** Start the capture thread with SIGINT and SIGTERM blocked, so only the main thread gets them. */
-static int start_capture_thread(pthread_t *thread, struct capture_thread_args *args)
-{
-    sigset_t block;
-    sigset_t old;
-    int rc;
-
-    sigemptyset(&block);
-    sigaddset(&block, SIGINT);
-    sigaddset(&block, SIGTERM);
-    pthread_sigmask(SIG_BLOCK, &block, &old);
-    rc = pthread_create(thread, NULL, capture_thread, args);
-    pthread_sigmask(SIG_SETMASK, &old, NULL);
-    if (rc != 0) {
-        syslog(LOG_ERR, "pthread_create for capture failed: %s", strerror(rc));
-        return -1;
-    }
-    return 0;
-}
-
 /** Accept loop: runs until a signal arrives or the capture thread exits. */
 static void serve(struct http_server *srv)
 {
@@ -293,11 +283,16 @@ static void usage(const char *prog)
            "  -f, --fps N             frame rate (default %d)\n"
            "  -p, --port N            HTTP port (default %d)\n"
            "  -c, --max-clients N     maximum HTTP clients at once (default %d)\n"
+           "      --motion-percent P  percentage of pixels that must change for motion (default %.1f)\n"
+           "      --motion-pixel N    brightness change (1-255) that counts a pixel as changed\n"
+           "                          (default %d)\n"
+           "      --motion-holdoff MS motion ends after this long without motion (default %d)\n"
            "  -s, --snapshot FILE     save one frame to FILE and exit\n"
            "  -v, --version           print the version and exit\n"
            "  -h, --help              print this help and exit\n",
            prog, DEFAULT_DEVICE, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS, DEFAULT_PORT,
-           DEFAULT_MAX_CLIENTS);
+           DEFAULT_MAX_CLIENTS, MOTION_DEFAULT_TRIGGER_PERCENT, MOTION_DEFAULT_PIXEL_THRESHOLD,
+           MOTION_DEFAULT_HOLDOFF_MS);
 }
 
 static int parse_positive(const char *arg, unsigned int *out)
@@ -322,6 +317,9 @@ int main(int argc, char *argv[])
         { "fps",      required_argument, NULL, 'f' },
         { "port",     required_argument, NULL, 'p' },
         { "max-clients", required_argument, NULL, 'c' },
+        { "motion-percent", required_argument, NULL, OPT_MOTION_PERCENT },
+        { "motion-pixel", required_argument, NULL, OPT_MOTION_PIXEL },
+        { "motion-holdoff", required_argument, NULL, OPT_MOTION_HOLDOFF },
         { "snapshot", required_argument, NULL, 's' },
         { "version",  no_argument,       NULL, 'v' },
         { "help",     no_argument,       NULL, 'h' },
@@ -336,6 +334,12 @@ int main(int argc, char *argv[])
     unsigned int port = DEFAULT_PORT;
     unsigned int max_clients = DEFAULT_MAX_CLIENTS;
     struct http_server *srv = NULL;
+    struct motion_config motion_cfg = {
+        .pixel_threshold = MOTION_DEFAULT_PIXEL_THRESHOLD,
+        .trigger_percent = MOTION_DEFAULT_TRIGGER_PERCENT,
+        .holdoff_ms = MOTION_DEFAULT_HOLDOFF_MS,
+    };
+    struct motion *motion = NULL;
     struct capture_thread_args capture_args;
     pthread_t capture_tid;
     const char *snapshot_path = NULL;
@@ -344,6 +348,7 @@ int main(int argc, char *argv[])
     struct capture *cap;
     int opt;
     int ret;
+    int rc;
 
     while ((opt = getopt_long(argc, argv, "dD:W:H:f:p:c:s:vh", long_options, NULL)) != -1) {
         switch (opt) {
@@ -373,6 +378,30 @@ int main(int argc, char *argv[])
         case 'c':
             if (parse_positive(optarg, &max_clients) == -1 || max_clients > MAX_CLIENTS_LIMIT) {
                 fprintf(stderr, "Invalid client limit (1 to %d): %s\n", MAX_CLIENTS_LIMIT, optarg);
+                return EXIT_FAILURE;
+            }
+            break;
+        case OPT_MOTION_PERCENT: {
+            char *end;
+
+            motion_cfg.trigger_percent = strtod(optarg, &end);
+            if (*optarg == '\0' || *end != '\0' || motion_cfg.trigger_percent <= 0 ||
+                motion_cfg.trigger_percent > 100) {
+                fprintf(stderr, "Invalid motion percentage (above 0, up to 100): %s\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
+        }
+        case OPT_MOTION_PIXEL:
+            if (parse_positive(optarg, &motion_cfg.pixel_threshold) == -1 ||
+                motion_cfg.pixel_threshold > 255) {
+                fprintf(stderr, "Invalid motion pixel threshold (1 to 255): %s\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
+        case OPT_MOTION_HOLDOFF:
+            if (parse_positive(optarg, &motion_cfg.holdoff_ms) == -1) {
+                fprintf(stderr, "Invalid motion hold-off (1 to 10000 ms): %s\n", optarg);
                 return EXIT_FAILURE;
             }
             break;
@@ -428,7 +457,9 @@ int main(int argc, char *argv[])
     capture_args.cap = cap;
     capture_args.store = &store;
     capture_args.result = 0;
-    if (start_capture_thread(&capture_tid, &capture_args) == -1) {
+    rc = thread_create_signals_blocked(&capture_tid, capture_thread, &capture_args);
+    if (rc != 0) {
+        syslog(LOG_ERR, "pthread_create for capture failed: %s", strerror(rc));
         http_server_close(srv);
         capture_close(cap);
         frame_store_destroy(&store);
@@ -439,14 +470,20 @@ int main(int argc, char *argv[])
     if (snapshot_path != NULL) {
         ret = save_snapshot(&store, snapshot_path);
     } else {
-        serve(srv);
-        ret = 0;
+        motion = motion_start(&motion_cfg, &store);
+        if (motion != NULL) {
+            serve(srv);
+            ret = 0;
+        } else {
+            ret = -1;
+        }
     }
 
     /* Stop the producer, wake all readers, then disconnect and join the clients */
     atomic_store(&capture_stop, 1);
     frame_store_shutdown(&store);
     http_server_close(srv);
+    motion_stop(motion);
     pthread_join(capture_tid, NULL);
     if (capture_args.result == -1) {
         ret = -1;
