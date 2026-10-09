@@ -35,10 +35,12 @@ flowchart LR
 
     subgraph PI["Raspberry Pi 4 Model B (Buildroot Linux)"]
         LED["Onboard ACT LED<br/>(status LED)"]
+        LCD["3.5in SPI display<br/>480x320"]
         WDT["bcm2835 hardware<br/>watchdog"]
         subgraph KERNEL["Kernel"]
             UVC["uvcvideo driver<br/>/dev/video0"]
             DRV["status_led driver (custom)<br/>/dev/status_led"]
+            FB["fb_ili9486 driver<br/>/dev/fb0"]
             WDDEV["bcm2835_wdt driver<br/>/dev/watchdog"]
         end
         subgraph USER["Userspace"]
@@ -48,6 +50,7 @@ flowchart LR
                 HTTP["HTTP client threads<br/>MJPEG streaming"]
                 MOT["Motion thread"]
                 REC["Recorder thread<br/>5 s pre-event ring buffer"]
+                DISP["Display thread<br/>image and status bar"]
             end
             NTP["BusyBox ntpd"]
         end
@@ -58,6 +61,10 @@ flowchart LR
         MOT --> REC
         REC --> DRV
         DRV -- GPIO 42 --> LED
+        CAP --> DISP
+        REC --> DISP
+        DISP --> FB
+        FB -- SPI --> LCD
         REC --> SD[("/data/recordings<br/>SD card partition 3")]
         SUP -- "fork / exec" --> SRV
         SUP --> WDDEV
@@ -68,8 +75,8 @@ flowchart LR
     NTP -- Ethernet --> POOL["pool.ntp.org"]
 ```
 
-At boot the init scripts, in order: load the status LED driver (`S15status-led`), create (first
-boot only), check and mount the recordings partition (`S20recordings`), bring up Ethernet by DHCP
+At boot the init scripts, in order: load the status LED driver (`S15status-led`), load the
+display driver (`S16display`), create (first boot only), check and mount the recordings partition (`S20recordings`), bring up Ethernet by DHCP
 (`S40network`), start network time (`S45ntpd`), and start `camera-supervisor`, which runs
 `camera-server` (`S90camera-server`). See the [README](../README.md) for using the camera and
 getting the recordings off the Pi.
@@ -91,6 +98,9 @@ Buildroot, using `raspberrypi4_64_defconfig` as the base configuration with a
 * The Pi's **onboard green activity (ACT) LED**, used as the status LED. A device tree overlay
   releases it from the kernel's default LED driver so the project's GPIO driver can control it.
   No external components are needed.
+* Optional: a **3.5" 480x320 SPI touch display** (Hosyond; ILI9486 display controller, XPT2046
+  touch controller) plugged onto the GPIO header, which shows the camera image and the recording
+  status. The kernel's `fb_ili9486` driver and the Raspberry Pi `piscreen` overlay support it.
 
 All hardware is sourced by me.
 
@@ -134,6 +144,8 @@ Not yet discussed in class:
   management.
 * Process supervision and the Linux watchdog interface (`/dev/watchdog`, backed by the Pi's
   `bcm2835_wdt` driver).
+* Drawing on a memory-mapped Linux framebuffer (`/dev/fb0`) backed by an SPI display, with
+  JPEG frames decoded straight to RGB565.
 
 ## Shared Material
 

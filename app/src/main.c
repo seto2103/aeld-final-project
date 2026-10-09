@@ -7,6 +7,7 @@
  *   client threads - one per HTTP connection, started by the HTTP server, read the frame store
  *   motion thread  - reads the frame store and reports when motion starts and ends
  *   recorder thread - reads every frame from the frame ring and saves a clip per motion event
+ *   display thread - reads the frame store and shows the image and status on the SPI display
  *   main thread    - runs the accept loop, handles SIGINT and SIGTERM, and stops and joins the
  *                    others on exit
  * The status LED is on while capturing, blinks while a clip is recorded, and is off once stopped.
@@ -28,6 +29,7 @@
 #include <unistd.h>
 
 #include "capture.h"
+#include "display.h"
 #include "frame_store.h"
 #include "http_server.h"
 #include "led.h"
@@ -57,6 +59,7 @@ enum {
     OPT_MOTION_HOLDOFF,
     OPT_RECORD_DIR,
     OPT_RECORD_FREE,
+    OPT_DISPLAY,
 };
 
 /* How often the capture and accept loops check whether to stop */
@@ -308,12 +311,15 @@ static void usage(const char *prog)
            "      --record-dir DIR    save motion clips in DIR, \"\" to disable (default %s)\n"
            "      --record-free P     delete the oldest clips to keep P%% of the space free\n"
            "                          (default %d)\n"
+           "      --display PATH      show the camera on framebuffer PATH, \"\" to disable\n"
+           "                          (default %s)\n"
            "  -s, --snapshot FILE     save one frame to FILE and exit\n"
            "  -v, --version           print the version and exit\n"
            "  -h, --help              print this help and exit\n",
            prog, DEFAULT_DEVICE, DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS, DEFAULT_PORT,
            DEFAULT_MAX_CLIENTS, MOTION_DEFAULT_TRIGGER_PERCENT, MOTION_DEFAULT_PIXEL_THRESHOLD,
-           MOTION_DEFAULT_HOLDOFF_MS, DEFAULT_RECORD_DIR, DEFAULT_RECORD_FREE_PERCENT);
+           MOTION_DEFAULT_HOLDOFF_MS, DEFAULT_RECORD_DIR, DEFAULT_RECORD_FREE_PERCENT,
+           DISPLAY_DEFAULT_DEVICE);
 }
 
 static int parse_positive(const char *arg, unsigned int *out)
@@ -343,6 +349,7 @@ int main(int argc, char *argv[])
         { "motion-holdoff", required_argument, NULL, OPT_MOTION_HOLDOFF },
         { "record-dir", required_argument, NULL, OPT_RECORD_DIR },
         { "record-free", required_argument, NULL, OPT_RECORD_FREE },
+        { "display", required_argument, NULL, OPT_DISPLAY },
         { "snapshot", required_argument, NULL, 's' },
         { "version",  no_argument,       NULL, 'v' },
         { "help",     no_argument,       NULL, 'h' },
@@ -367,6 +374,8 @@ int main(int argc, char *argv[])
     unsigned int record_free = DEFAULT_RECORD_FREE_PERCENT;
     struct recorder *recorder = NULL;
     struct led *led = NULL;
+    const char *display_device = DISPLAY_DEFAULT_DEVICE;
+    struct display *display = NULL;
     struct frame_ring ring;
     int have_ring = 0;
     struct capture_thread_args capture_args;
@@ -436,6 +445,9 @@ int main(int argc, char *argv[])
             break;
         case OPT_RECORD_DIR:
             record_dir = optarg;
+            break;
+        case OPT_DISPLAY:
+            display_device = optarg;
             break;
         case OPT_RECORD_FREE:
             if (parse_positive(optarg, &record_free) == -1 || record_free > 95) {
@@ -526,6 +538,14 @@ int main(int argc, char *argv[])
             syslog(LOG_INFO, "Recording disabled by --record-dir \"\"");
         }
         if (motion != NULL && (recorder != NULL || !have_ring)) {
+            /* Optional: camera-server runs the same without a display */
+            if (*display_device != '\0') {
+                struct display_config display_cfg = { .device = display_device };
+                unsigned int fps;
+
+                capture_get_format(cap, &display_cfg.width, &display_cfg.height, &fps);
+                display = display_start(&display_cfg, &store, recorder, srv);
+            }
             serve(srv);
             ret = 0;
         }
@@ -537,6 +557,8 @@ int main(int argc, char *argv[])
     if (have_ring) {
         frame_ring_shutdown(&ring);
     }
+    /* Before the server and recorder, whose status it shows */
+    display_stop(display);
     http_server_close(srv);
     srv = NULL;
     recorder_stop(recorder);

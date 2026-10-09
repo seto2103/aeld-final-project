@@ -52,6 +52,7 @@ struct recorder {
     const struct motion *motion;
     pthread_t thread;
     atomic_int stop;
+    atomic_int recording;           /* 1 while a clip is being written */
 };
 
 /** A clip being written, and the names it is written under */
@@ -297,6 +298,7 @@ static int record_event(struct recorder *r, uint64_t newest)
     }
     syslog(LOG_INFO, "Recording %s, starting %llu frames before the motion", clip.path,
            (unsigned long long)(newest - seq + 1));
+    atomic_store(&r->recording, 1);
     led_set(r->cfg.led, STATUS_LED_MODE_BLINK);
 
     while (!atomic_load(&r->stop)) {
@@ -348,6 +350,7 @@ static int record_event(struct recorder *r, uint64_t newest)
         clip_close(r, &clip);
     }
     /* Back to steady on; when the daemon is stopping, main turns it off after this */
+    atomic_store(&r->recording, 0);
     led_set(r->cfg.led, STATUS_LED_MODE_ON);
     frame_copy_free(&frame);
     return result;
@@ -413,4 +416,36 @@ void recorder_stop(struct recorder *r)
     atomic_store(&r->stop, 1);
     pthread_join(r->thread, NULL);
     free(r);
+}
+
+int recorder_recording(const struct recorder *r)
+{
+    return r != NULL && atomic_load(&r->recording);
+}
+
+int recorder_storage(const struct recorder *r, unsigned int *clips,
+                     unsigned long long *free_bytes)
+{
+    struct statvfs vfs;
+    struct dirent *entry;
+    size_t len;
+    DIR *dir;
+
+    if (r == NULL || statvfs(r->cfg.dir, &vfs) == -1) {
+        return -1;
+    }
+    dir = opendir(r->cfg.dir);
+    if (dir == NULL) {
+        return -1;
+    }
+    *clips = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        len = strlen(entry->d_name);
+        if (len > 4 && strcmp(entry->d_name + len - 4, ".avi") == 0) {
+            (*clips)++;
+        }
+    }
+    closedir(dir);
+    *free_bytes = (unsigned long long)vfs.f_bavail * vfs.f_frsize;
+    return 0;
 }

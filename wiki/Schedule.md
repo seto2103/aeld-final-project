@@ -20,7 +20,7 @@ All issues are assigned to Sebastian Torres ([@seto2103](https://github.com/seto
 | 3 | [#10 camera-server drives the status LED: on while running, blinking while recording](https://github.com/seto2103/aeld-final-project/issues/10) | #7, #9 | Done |
 | 3 | [#11 camera-supervisor restarts camera-server after a failure and feeds the hardware watchdog](https://github.com/seto2103/aeld-final-project/issues/11) | #6 | Done |
 | 3 | [#12 Network time, full image check and wiki update](https://github.com/seto2103/aeld-final-project/issues/12) | #9, #10, #11 | Done |
-| 3 | [#14 3.5" SPI display shows the live camera image and the recording status](https://github.com/seto2103/aeld-final-project/issues/14) | #12 | Not started |
+| 3 | [#14 3.5" SPI display shows the live camera image and the recording status](https://github.com/seto2103/aeld-final-project/issues/14) | #12 | Done |
 | 3 | [#13 Demo video of the finished security camera](https://github.com/seto2103/aeld-final-project/issues/13) | #12, #14 | Not started |
 
 ## Sprint 1

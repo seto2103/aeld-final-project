@@ -24,6 +24,9 @@ dtoverlay=miniuart-bt
 # Hand the ACT LED to the status_led driver (driver/dts/status-led-overlay.dts)
 dtoverlay=status-led
 
+# 3.5" 480x320 SPI display (ILI9486) on the GPIO header, loaded by S16display
+dtoverlay=piscreen
+
 # enable autoprobing of Bluetooth driver without need of hciattach/btattach
 dtparam=krnbt=on
 

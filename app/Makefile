@@ -9,8 +9,8 @@ APP_LDLIBS = -pthread -ljpeg
 
 TARGETS = camera-server camera-supervisor
 
-SRC = src/main.c src/capture.c src/frame_store.c src/http_server.c src/motion.c src/frame_ring.c src/avi_writer.c src/recorder.c src/led.c
-HDR = src/capture.h src/frame_store.h src/http_server.h src/motion.h src/thread_util.h src/frame_ring.h src/avi_writer.h src/recorder.h src/led.h
+SRC = src/main.c src/capture.c src/frame_store.c src/http_server.c src/motion.c src/frame_ring.c src/avi_writer.c src/recorder.c src/led.c src/display.c
+HDR = src/capture.h src/frame_store.h src/http_server.h src/motion.h src/thread_util.h src/frame_ring.h src/avi_writer.h src/recorder.h src/led.h src/display.h
 
 all: $(TARGETS)
 

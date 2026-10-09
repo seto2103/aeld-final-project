@@ -71,7 +71,9 @@ SLIST_HEAD(client_list, http_client);
 struct http_server {
     int listen_fd;
     unsigned int max_clients;
-    unsigned int num_clients;       /* entries in clients, including finished but not joined */
+    /* Entries in clients, including finished but not joined. Changed only by the main thread,
+     * atomic so the display thread can read it. */
+    atomic_uint num_clients;
     struct frame_store *store;
     struct client_list clients;
 };
@@ -431,6 +433,11 @@ static void client_join(struct http_server *srv, struct http_client *c)
     SLIST_REMOVE(&srv->clients, c, http_client, entries);
     srv->num_clients--;
     free(c);
+}
+
+unsigned int http_server_clients(const struct http_server *srv)
+{
+    return atomic_load(&srv->num_clients);
 }
 
 void http_server_reap(struct http_server *srv)

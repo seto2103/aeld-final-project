@@ -2,7 +2,8 @@
 
 A Buildroot-based network security camera for the Raspberry Pi 4 Model B. A Logitech StreamCam is
 captured through the V4L2 API, streamed live to a browser as MJPEG over HTTP, and recorded to disk
-when motion is detected. A custom GPIO character driver controls a status LED.
+when motion is detected. A custom GPIO character driver controls a status LED, and an optional
+3.5" SPI display shows the camera image and recording status.
 
 See the [Project Overview](wiki/Project-Overview.md) page for the full proposal, and the
 [Schedule](wiki/Schedule.md) page for sprint status.
@@ -127,6 +128,26 @@ cat /dev/status_led             # prints the current mode
 
 `camera-server` sets the LED with the ioctls in `driver/status_led_ioctl.h`, so a mode written by
 hand only lasts until its next change. Without the driver, `camera-server` runs without the LED.
+
+## Display
+
+An optional 3.5" 480x320 SPI touch display (ILI9486 display controller, XPT2046 touch controller,
+sold for example by Hosyond) plugs onto the Pi's GPIO header and shows the camera image, about 10
+frames per second, with a status bar:
+
+* the date and time (UTC);
+* `CLIENTS`: the number of HTTP clients watching;
+* `CLIPS` and `FREE`: the number of saved clips and the free space on the recordings partition;
+* a red `REC` marker while a clip is being recorded.
+
+The screen goes black while `camera-server` is not running, for example while the camera is
+unplugged. Touch is not used.
+
+The `piscreen` overlay (`dtoverlay=piscreen` in `config.txt`) describes the display, and the
+`S16display` init script loads its driver (`fb_ili9486`), which provides `/dev/fb0`, and takes
+the kernel console off it. `camera-server` draws on `/dev/fb0` with the camera frames decoded at
+3/8 size by libjpeg-turbo. `--display` selects another framebuffer, `--display ""` turns the
+display off, and without a display `camera-server` runs the same.
 
 ## Supervisor and watchdog
 

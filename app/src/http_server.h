@@ -32,6 +32,9 @@ void http_server_accept(struct http_server *srv);
 /** Join client threads that have finished. Call regularly from the accept loop. */
 void http_server_reap(struct http_server *srv);
 
+/** Number of connected clients. Safe to call from any thread. */
+unsigned int http_server_clients(const struct http_server *srv);
+
 /**
  * Disconnect all clients, join their threads, close the listening socket and free the server.
  * Call frame_store_shutdown() first so streaming clients stop waiting for frames.
