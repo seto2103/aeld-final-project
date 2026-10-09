@@ -1,0 +1,2 @@
+# Network time, started by S45ntpd from the camera-server package
+CONFIG_NTPD=y

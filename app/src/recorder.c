@@ -13,6 +13,9 @@
  * deleted until free space is back above the limit, so the newest recordings are always kept.
  * The clip being written is never deleted. If space can't be freed, the clip is closed early so
  * it stays playable, and recording stops until there is room again.
+ *
+ * Clips are named by the UTC time of their first frame. The Pi has no battery-backed clock, so
+ * until ntpd sets it after boot the clock reads 1970; clips from then are named by uptime instead.
  */
 
 #include "recorder.h"
@@ -40,6 +43,8 @@
 /* Different names for clips that start in the same second, for example after a reboot resets
  * the clock */
 #define MAX_NAME_ATTEMPTS       100
+/* A clock before 2026-01-01 00:00 UTC has not been set from the network yet */
+#define CLOCK_SET_AFTER         1767225600
 
 struct recorder {
     struct recorder_config cfg;
@@ -191,6 +196,31 @@ static int check_dir(const struct recorder *r)
 }
 
 /**
+ * Name a clip by the time of its first frame, or by the uptime at that frame (for example
+ * uptime_00h05m36s) if the clock has not been set yet.
+ */
+static void clip_name(char *name, size_t size, time_t start_time)
+{
+    struct timespec boot;
+    struct tm tm;
+    long uptime;
+
+    if (start_time >= CLOCK_SET_AFTER) {
+        gmtime_r(&start_time, &tm);
+        strftime(name, size, "%Y-%m-%d_%H-%M-%S", &tm);
+        return;
+    }
+
+    clock_gettime(CLOCK_BOOTTIME, &boot);
+    uptime = (long)boot.tv_sec - (long)(time(NULL) - start_time);
+    if (uptime < 0) {
+        uptime = 0;
+    }
+    snprintf(name, size, "uptime_%02ldh%02ldm%02lds", uptime / 3600, uptime / 60 % 60,
+             uptime % 60);
+}
+
+/**
  * Create a new clip named by the time its first frame was captured.
  * @param start_time wall clock time of the first frame
  * @return 0 on success, -1 on error (logged)
@@ -198,11 +228,9 @@ static int check_dir(const struct recorder *r)
 static int clip_open(const struct recorder *r, struct clip *clip, time_t start_time)
 {
     char name[64];
-    struct tm tm;
     int attempt;
 
-    gmtime_r(&start_time, &tm);
-    strftime(name, sizeof(name), "%Y-%m-%d_%H-%M-%S", &tm);
+    clip_name(name, sizeof(name), start_time);
 
     for (attempt = 0; attempt < MAX_NAME_ATTEMPTS; attempt++) {
         struct stat st;

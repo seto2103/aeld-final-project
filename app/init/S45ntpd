@@ -1,0 +1,36 @@
+#!/bin/sh
+
+# BusyBox ntpd sets the clock from the network, since the Pi has no battery-backed clock and
+# otherwise starts in 1970. It keeps retrying the servers until the network is up.
+
+SERVERS="-p 0.pool.ntp.org -p 1.pool.ntp.org -p 2.pool.ntp.org"
+
+start() {
+    echo "Starting ntpd..."
+    # ntpd is a BusyBox applet, so it is found by name rather than by executable
+    start-stop-daemon --start --name ntpd --startas /usr/sbin/ntpd -- $SERVERS
+}
+
+stop() {
+    echo "Stopping ntpd..."
+    start-stop-daemon --stop --name ntpd
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0

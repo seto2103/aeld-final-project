@@ -27,31 +27,52 @@ the course: a custom image, a kernel driver, a multi-threaded daemon and network
 
 **Block diagram**
 
+As built:
+
 ```mermaid
 flowchart LR
     CAM["Logitech StreamCam<br/>(USB UVC webcam)"] -- USB --> UVC
 
     subgraph PI["Raspberry Pi 4 Model B (Buildroot Linux)"]
         LED["Onboard ACT LED<br/>(status LED)"]
+        WDT["bcm2835 hardware<br/>watchdog"]
         subgraph KERNEL["Kernel"]
             UVC["uvcvideo driver<br/>/dev/video0"]
-            DRV["GPIO char driver (custom)<br/>/dev/aesdgpio"]
+            DRV["status_led driver (custom)<br/>/dev/status_led"]
+            WDDEV["bcm2835_wdt driver<br/>/dev/watchdog"]
         end
         subgraph USER["Userspace"]
-            CAP["Capture daemon (custom)<br/>V4L2 mmap streaming"]
-            HTTP["MJPEG HTTP server<br/>(based on aesdsocket)"]
-            MOT["Motion detector<br/>and clip recorder"]
+            SUP["camera-supervisor (custom)<br/>restarts camera-server"]
+            subgraph SRV["camera-server (custom)"]
+                CAP["Capture thread<br/>V4L2 mmap streaming"]
+                HTTP["HTTP client threads<br/>MJPEG streaming"]
+                MOT["Motion thread"]
+                REC["Recorder thread<br/>5 s pre-event ring buffer"]
+            end
+            NTP["BusyBox ntpd"]
         end
         UVC --> CAP
         CAP --> HTTP
         CAP --> MOT
-        MOT --> DRV
-        DRV -- GPIO output --> LED
-        MOT --> SD[("SD card<br/>recordings")]
+        CAP --> REC
+        MOT --> REC
+        REC --> DRV
+        DRV -- GPIO 42 --> LED
+        REC --> SD[("/data/recordings<br/>SD card partition 3")]
+        SUP -- "fork / exec" --> SRV
+        SUP --> WDDEV
+        WDDEV --> WDT
     end
 
-    HTTP -- "Ethernet / Wi-Fi" --> BROWSER["Browser on LAN"]
+    HTTP -- Ethernet --> BROWSER["Browser or VLC on LAN"]
+    NTP -- Ethernet --> POOL["pool.ntp.org"]
 ```
+
+At boot the init scripts, in order: load the status LED driver (`S15status-led`), create (first
+boot only), check and mount the recordings partition (`S20recordings`), bring up Ethernet by DHCP
+(`S40network`), start network time (`S45ntpd`), and start `camera-supervisor`, which runs
+`camera-server` (`S90camera-server`). See the [README](../README.md) for using the camera and
+getting the recordings off the Pi.
 
 ## Target Build System
 
@@ -79,8 +100,10 @@ All hardware is sourced by me.
   debugging.
 * [libjpeg-turbo](https://github.com/libjpeg-turbo/libjpeg-turbo), to decode camera JPEG frames
   for software motion detection.
+* [BusyBox](https://busybox.net/) `ntpd`, to set the clock from the network, and `fdisk`, with
+  util-linux `partx` and e2fsprogs `mkfs.ext4`, to create the recordings partition on first boot.
 
-Both are available as Buildroot packages. The capture daemon, HTTP server, motion detector and
+All are available as Buildroot packages. The capture daemon, HTTP server, motion detector and
 GPIO driver are written for this project.
 
 ## Previously Discussed Content
@@ -119,10 +142,10 @@ semesters.
 
 ## Source Code Organization
 
-* Buildroot repository (external tree, defconfig and build scripts) will be hosted at
+* Buildroot repository (external tree, defconfig and build scripts):
   https://github.com/seto2103/aeld-final-project
-* Capture daemon / HTTP server application code and the GPIO driver code will be hosted in the
-  same repository at https://github.com/seto2103/aeld-final-project, under `app/` and `driver/`.
+* `camera-server`, `camera-supervisor` and the `status_led` driver are in the same repository,
+  under `app/` and `driver/`.
 * The GitHub Projects board is linked to the same repository and hosted at
   https://github.com/users/seto2103/projects/1
 

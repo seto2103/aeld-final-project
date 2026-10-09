@@ -35,6 +35,10 @@ Insert the SD card, find its device name with `lsblk`, and write the image to it
 sudo dd if=buildroot/output/images/sdcard.img of=/dev/sdX bs=4M conv=fsync status=progress
 ```
 
+Writing the image to a card that was already used in the camera also erases its recordings: the
+first boot creates and formats the recordings partition again. Copy the clips off first (see
+[Recordings](#recordings)).
+
 ## Running
 
 Insert the SD card in the Raspberry Pi 4 Model B, connect Ethernet and power it on. The Pi gets
@@ -76,7 +80,7 @@ The highest score every 10 seconds is logged at debug level, which helps when ch
 ## Recordings
 
 Each motion event is saved as an MJPEG AVI clip in `/data/recordings`, starting 5 seconds before
-the motion and ending 3 seconds after it, named by its start time (for example
+the motion and ending 3 seconds after it, named by its start time in UTC (for example
 `2026-11-02_14-03-27.avi`). Clips play in VLC. A clip that is still being written ends in
 `.avi.part`, and one longer than 1 GB (about 3.5 minutes) continues in a new file.
 
@@ -92,6 +96,14 @@ scp -O 'root@<pi-address>:/data/recordings/*.avi' .
 ```
 
 `--record-dir` changes the directory, and `--record-dir ""` turns recording off.
+
+## Network time
+
+The Pi has no battery-backed clock, so it starts every boot in 1970. BusyBox `ntpd`, started by
+`S45ntpd`, sets the clock from `pool.ntp.org` shortly after the network comes up. A clip that
+starts before then is named by the uptime of its first frame instead (for example
+`uptime_00h00m42s.avi`); without network access every clip is named that way. Clips are deleted
+oldest first by modification time, so clips from before the clock was set are deleted first.
 
 ## Status LED
 

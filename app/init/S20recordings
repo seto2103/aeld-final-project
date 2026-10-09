@@ -39,7 +39,9 @@ create_partition() {
     done
     [ -b $PART ] || return 1
 
-    mkfs.ext4 -q -L recordings $PART
+    # -F: after the card is rewritten, the old recordings filesystem is often still there, and
+    # without it mkfs asks whether to proceed. Nobody can answer that at boot.
+    mkfs.ext4 -q -F -L recordings $PART < /dev/null
 }
 
 start() {
