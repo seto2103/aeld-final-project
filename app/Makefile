@@ -7,17 +7,21 @@ VERSION ?= 0.1.0
 APP_CFLAGS = -Wall -Wextra -pthread -DVERSION=\"$(VERSION)\" -I../driver
 APP_LDLIBS = -pthread -ljpeg
 
-TARGET = camera-server
+TARGETS = camera-server camera-supervisor
 
 SRC = src/main.c src/capture.c src/frame_store.c src/http_server.c src/motion.c src/frame_ring.c src/avi_writer.c src/recorder.c src/led.c
 HDR = src/capture.h src/frame_store.h src/http_server.h src/motion.h src/thread_util.h src/frame_ring.h src/avi_writer.h src/recorder.h src/led.h
 
-all: $(TARGET)
+all: $(TARGETS)
 
-$(TARGET): $(SRC) $(HDR)
-	$(CC) $(CFLAGS) $(APP_CFLAGS) $(LDFLAGS) -o $(TARGET) $(SRC) $(APP_LDLIBS)
+camera-server: $(SRC) $(HDR)
+	$(CC) $(CFLAGS) $(APP_CFLAGS) $(LDFLAGS) -o $@ $(SRC) $(APP_LDLIBS)
+
+# Single threaded, and needs no libraries
+camera-supervisor: src/supervisor.c
+	$(CC) $(CFLAGS) $(APP_CFLAGS) $(LDFLAGS) -o $@ src/supervisor.c
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGETS)
 
 .PHONY: all clean

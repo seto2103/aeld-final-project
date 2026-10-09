@@ -101,7 +101,7 @@ The onboard green ACT LED is the camera's status light:
 | --- | --- |
 | Steady on | `camera-server` is capturing |
 | Blinking | A motion clip is being recorded |
-| Off | `camera-server` is not running, for example after the camera was unplugged |
+| Off | `camera-server` is not running, for example while the camera is unplugged |
 
 A device tree overlay
 (`driver/dts/status-led-overlay.dts`, enabled with `dtoverlay=status-led` in `config.txt`) takes it
@@ -116,11 +116,27 @@ cat /dev/status_led             # prints the current mode
 `camera-server` sets the LED with the ioctls in `driver/status_led_ioctl.h`, so a mode written by
 hand only lasts until its next change. Without the driver, `camera-server` runs without the LED.
 
+## Supervisor and watchdog
+
+The init script (`/etc/init.d/S90camera-server`) starts `camera-supervisor`, which runs
+`camera-server` as a child process and starts it again whenever it exits, for example after a
+crash or while the camera is unplugged. The delay before each restart doubles from 1 s up to 30 s,
+and goes back to 1 s once `camera-server` has run for a minute, so after the camera is plugged
+back in streaming resumes within 30 s.
+
+The supervisor also opens the Pi's hardware watchdog (`/dev/watchdog`) with a 15 s timeout and
+feeds it every 5 s. If the system hangs, or the supervisor itself dies, the board reboots on its
+own. `/etc/init.d/S90camera-server stop` disarms the watchdog before the supervisor exits, so
+stopping the service does not reboot the board.
+
+Options after `--` are passed to `camera-server`, and `camera-supervisor -h` lists the
+supervisor's own options. Both programs log to syslog (`/var/log/messages`).
+
 ## Source layout
 
 | Path | Contents |
 | --- | --- |
-| `app/` | `camera-server` userspace daemon (C), its Makefile and init script |
+| `app/` | `camera-server` daemon and `camera-supervisor` (C), their Makefile and init scripts |
 | `driver/` | `status_led` kernel module, its device tree overlay and init script |
 | `base_external/` | Buildroot external tree: project defconfig, `config.txt`, and the `camera-server` and `status-led` packages |
 | `buildroot/` | Buildroot submodule, pinned to 2024.02.13 |
@@ -131,11 +147,14 @@ don't need to be committed before they can be built.
 
 ## Rebuilding after a code change
 
-Rebuild one package and copy the result to the Pi instead of reflashing the SD card:
+Rebuild one package and copy the result to the Pi instead of reflashing the SD card. Stop the
+service first, because a running program's binary can't be overwritten:
 
 ```
 make -C buildroot camera-server-rebuild
-scp -O buildroot/output/target/usr/bin/camera-server root@<pi-address>:/usr/bin/
+ssh root@<pi-address> /etc/init.d/S90camera-server stop
+scp -O buildroot/output/target/usr/bin/camera-server buildroot/output/target/usr/bin/camera-supervisor root@<pi-address>:/usr/bin/
+ssh root@<pi-address> /etc/init.d/S90camera-server start
 
 make -C buildroot status-led-rebuild
 scp -O buildroot/output/target/lib/modules/*/extra/status_led.ko.xz root@<pi-address>:/lib/modules/$(ls buildroot/output/target/lib/modules)/extra/

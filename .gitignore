@@ -9,3 +9,4 @@ build/
 Module.symvers
 modules.order
 app/camera-server
+app/camera-supervisor

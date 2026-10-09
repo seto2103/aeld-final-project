@@ -1,25 +1,27 @@
 #!/bin/sh
 
-DAEMON=/usr/bin/camera-server
+DAEMON=/usr/bin/camera-supervisor
 DAEMON_OPTS="-d"
 
-# camera-server daemonizes itself with -d, so the process is found by name instead of a PID file
+# camera-supervisor runs camera-server, starts it again after it exits and feeds the hardware
+# watchdog. Both are found by executable path instead of a PID file.
 
 start() {
     echo "Starting camera-server..."
     # No hotplug helper in this image, so load the USB webcam driver explicitly
     modprobe uvcvideo
-    start-stop-daemon --start --name camera-server --exec $DAEMON -- $DAEMON_OPTS
+    start-stop-daemon --start --exec $DAEMON -- $DAEMON_OPTS
 }
 
 stop() {
     echo "Stopping camera-server..."
-    start-stop-daemon --stop --name camera-server
-    # BusyBox start-stop-daemon has no --retry, so wait up to 5 s for the process to exit
+    start-stop-daemon --stop --exec $DAEMON
+    # BusyBox start-stop-daemon has no --retry. The supervisor gives camera-server 10 s to exit,
+    # so wait up to 15 s for both to be gone.
     i=0
-    while pidof camera-server > /dev/null; do
+    while pidof camera-supervisor camera-server > /dev/null; do
         i=$((i + 1))
-        if [ $i -gt 25 ]; then
+        if [ $i -gt 75 ]; then
             echo "camera-server did not stop"
             return 1
         fi
