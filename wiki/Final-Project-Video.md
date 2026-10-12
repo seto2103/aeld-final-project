@@ -1,5 +1,7 @@
 # Final Project Video
 
+**Project Overview: https://github.com/seto2103/aeld-final-project/blob/main/wiki/Project-Overview.md**
+
 ## Overview
 
 This page provides an overview of Sebastian Torres's contribution to the AESD Final Project, a
