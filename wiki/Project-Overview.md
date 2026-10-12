@@ -1,5 +1,11 @@
 # Project Overview
 
+## Demo Video
+
+**Watch the demo video: https://drive.google.com/file/d/1Flw5Y8asWI2MkZ5BtPYQRghEUUnbfrjg/view?usp=drive_link**
+
+The [Final Project Video](Final-Project-Video.md) page describes what the video shows.
+
 ## Overview
 
 This project builds a network security camera on a Raspberry Pi 4 Model B running a custom
