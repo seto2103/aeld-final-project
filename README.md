@@ -8,8 +8,11 @@ when motion is detected. A custom GPIO character driver controls a status LED, a
 See the [Project Overview](wiki/Project-Overview.md) page for the full proposal, and the
 [Schedule](wiki/Schedule.md) page for sprint status.
 
-Demo video: [Final Project Video](https://drive.google.com/file/d/1Flw5Y8asWI2MkZ5BtPYQRghEUUnbfrjg/view?usp=drive_link),
-described on the [Final Project Video](wiki/Final-Project-Video.md) page.
+## Demo video
+
+**Watch the demo video: https://drive.google.com/file/d/1Flw5Y8asWI2MkZ5BtPYQRghEUUnbfrjg/view?usp=drive_link**
+
+The [Final Project Video](wiki/Final-Project-Video.md) page describes what the video shows.
 
 ## Building the image
 

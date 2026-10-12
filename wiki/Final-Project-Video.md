@@ -22,7 +22,7 @@ for the issues it was built in.
 
 ## Video Outline
 
-See [Final Project Video](https://drive.google.com/file/d/1Flw5Y8asWI2MkZ5BtPYQRghEUUnbfrjg/view?usp=drive_link)
+**Watch the video: https://drive.google.com/file/d/1Flw5Y8asWI2MkZ5BtPYQRghEUUnbfrjg/view?usp=drive_link**
 
 The video demonstrates:
 
